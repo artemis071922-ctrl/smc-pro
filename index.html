@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SMC PRO Terminal v1 · BTC/ETH/SOL 5M</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#030507">
 <style>
 :root{
   --bg0:#030507;--bg1:#070A0E;--bg2:#0C1016;--bg3:#11181F;--bg4:#161E28;
@@ -309,9 +313,25 @@ html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--t1);font
 .vol-row label{font-size:10px;color:var(--t2);white-space:nowrap}
 .vol-row input[type=range]{flex:1}
 .vol-row span{font-family:var(--mono);font-size:10px;color:var(--t2);min-width:24px;text-align:right}
+
+/* ── LOADING ── */
+#loadScreen{position:fixed;inset:0;background:#030507;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+#loadScreen.hide{display:none}
+.load-logo{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--gold);letter-spacing:3px}
+.load-sub{font-family:var(--mono);font-size:11px;color:var(--t3);letter-spacing:1px}
+.load-bar{width:200px;height:3px;background:var(--b1);border-radius:2px;overflow:hidden}
+.load-fill{height:100%;background:linear-gradient(90deg,var(--bull),var(--gold));border-radius:2px;animation:loadAnim 2s ease infinite}
+@keyframes loadAnim{0%{width:0%}60%{width:80%}100%{width:100%}}
+.load-status{font-family:var(--mono);font-size:10px;color:var(--t2);text-align:center;max-width:280px;line-height:1.6}
 </style>
 </head>
 <body>
+<div id="loadScreen">
+  <div class="load-logo">SMC · PRO</div>
+  <div class="load-sub">TERMINAL v1 · OKX LIVE</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+  <div class="load-status" id="loadStatus">正在連接 OKX 數據...<br>BTC / ETH / SOL 三幣初始化中</div>
+</div>
 <div id="app">
 
 <!-- ═══ HEADER ═══ -->
@@ -1004,7 +1024,7 @@ function updateAMD(u){
 // ══════════════════════════════════════════════════════════════
 async function fetchCandles(sym,bar,limit){
   try{
-    const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${sym}&bar=${bar}&limit=${limit}`);
+    const r=await fetch(`https://www.okx.com/api/v5/market/candles?instId=${sym}&bar=${bar}&limit=${limit}`,{mode:'cors',headers:{'Accept':'application/json'}});
     const j=await r.json();
     if(j.code!=='0') return [];
     return j.data.reverse().map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],v:+d[5]}));
@@ -1018,7 +1038,30 @@ async function fetchFund(sym){
   }catch(e){return 0;}
 }
 
+// REST polling fallback (runs every 5s if WS fails)
+async function restPoll(){
+  for(const k of Object.keys(COINS)){
+    try{
+      const C=COINS[k];
+      const r=await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${C.sym}`);
+      const j=await r.json();
+      if(j.code==='0'&&j.data?.[0]){
+        const t=j.data[0];
+        C.prevPx=C.px; C.px=+t.last;
+        if(k===activeCoin) updatePriceBar(t);
+        document.getElementById(`cs-${k}-px`).textContent=fmtPx(C.px,k);
+        document.getElementById(`bb${k}`).textContent=fmtPx(C.px,k);
+        if(k==='ETH'){document.getElementById('eth-px').textContent=fmtPx(C.px,k);updateAltChg('eth',C.px,+t.open24h);}
+        if(k==='SOL'){document.getElementById('sol-px').textContent=fmtPx(C.px,k);updateAltChg('sol',C.px,+t.open24h);}
+        if(!wsOK) setWsStatus('ok'); // Show as live if REST works
+      }
+    }catch(e){}
+  }
+}
+
 async function restInit(){
+  const ls=document.getElementById('loadStatus');
+  if(ls) ls.textContent='正在從 OKX 載入歷史K線資料...\nBTC / ETH / SOL 各時框初始化';
   for(const k of Object.keys(COINS)){
     const C=COINS[k];
     const [c5,c1,c15,c1h,fund]=await Promise.all([
@@ -1035,12 +1078,20 @@ async function restInit(){
   Object.keys(COINS).forEach(k=>{computeSMC(k);updateCoinUI(k);});
   drawCharts();
   connectWS();
+  // 隱藏載入畫面
+  setTimeout(()=>{
+    const ls=document.getElementById('loadScreen');
+    if(ls) ls.className='hide';
+  },2000);
 }
 
 // ══════════════════════════════════════════════════════════════
 //  WebSocket
 // ══════════════════════════════════════════════════════════════
 function connectWS(){
+  // First load data via REST immediately
+  restPoll();
+  setInterval(restPoll, 5000); // Poll every 5 seconds as fallback
   setWsStatus('wait');
   ws=new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
   ws.onopen=()=>{
@@ -1069,7 +1120,7 @@ function connectWS(){
     }catch(_){}
   };
   ws.onclose=()=>{ setWsStatus('err'); setTimeout(connectWS,5000); };
-  ws.onerror=()=>ws.close();
+  ws.onerror=(e)=>{console.warn('WS error:',e); ws.close();};
 }
 
 function onTicker(k,t){
@@ -1095,7 +1146,7 @@ function onCandle(k,tf,d){
   }
   if(tf==='5m'){
     const bv=bar.c>=bar.o?bar.v*0.6:bar.v*0.4;
-    C.cvdHist.push(bv-（bar.v-bv)); C.cvdCum+=(bv-(bar.v-bv));
+    C.cvdHist.push(bv-(bar.v-bv)); C.cvdCum+=(bv-(bar.v-bv));
     if(C.cvdHist.length>30) C.cvdHist.shift();
     computeSMC(k); updateCoinUI(k);
     if(k===activeCoin) drawCharts();
@@ -1848,6 +1899,7 @@ function localHHMM(){
   return `${String(u.getUTCHours()).padStart(2,'0')}:${String(u.getUTCMinutes()).padStart(2,'0')}`;
 }
 function setWsStatus(s){
+  if(wsOK&&s==='wait') return; // Don't downgrade if already working
   wsOK=(s==='ok');
   const el=document.getElementById('wsTag');
   el.textContent=s==='ok'?'LIVE':s==='wait'?'CONNECTING':'OFFLINE';
