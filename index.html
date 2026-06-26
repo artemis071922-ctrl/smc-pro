@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>smc-pro · ICT 軍師駕駛艙 v0.22</title>
+<title>smc-pro · ICT 軍師駕駛艙 v0.23</title>
 <style>
 :root {
   --bg: #0E1116;
@@ -2018,7 +2018,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.22 · ICT 雙引擎核心</span></div>
+    <div class="logo">smc-pro<span class="v">v0.23 · 三狙擊鏡獨立</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2476,7 +2476,7 @@ body {
         <!-- 🎯 高勝率進場卡（含整合鮮度時間軸） -->
         <div class="entry-card highquality" id="highEntryCard">
           <div class="entry-head">
-            <div class="entry-title"><span style="font-size:14px">🎯</span> 高勝率進場卡</div>
+            <div class="entry-title"><span style="font-size:14px">🎯</span> 高勝率進場卡 <span style="font-size:9.5px; font-weight:700; color:#1f6feb; background:rgba(31,111,235,0.13); padding:1.5px 5px; border-radius:6px; letter-spacing:0.3px; margin-left:4px; border:1px solid rgba(31,111,235,0.35)">全市場最強</span></div>
             <div class="entry-side short" id="entrySide">做空</div>
           </div>
           <!-- 整合鮮度時間軸 -->
@@ -2518,6 +2518,7 @@ body {
             <div class="adv-head-left">
               <span style="font-size:16px">🧠</span>
               <span class="adv-title">ICT 軍師</span>
+              <span style="font-size:9.5px; font-weight:700; color:#1f6feb; background:rgba(31,111,235,0.13); padding:1.5px 5px; border-radius:6px; letter-spacing:0.3px; margin-left:4px; border:1px solid rgba(31,111,235,0.35)">全市場最強</span>
             </div>
             <div class="adv-clock" id="advClock">
               <span class="lbl">發生</span><span class="time" id="advTime">15:15</span>
@@ -2624,7 +2625,7 @@ body {
       <!-- 右下：小單卡 -->
       <div>
         <div class="small-title">
-          <span class="l">⚡ 小單卡</span>
+          <span class="l">⚡ 小單卡 <span style="font-size:9.5px; font-weight:700; color:#1f6feb; background:rgba(31,111,235,0.13); padding:1.5px 5px; border-radius:6px; letter-spacing:0.3px; margin-left:4px; border:1px solid rgba(31,111,235,0.35)">全市場最強</span></span>
           <span class="r" id="smCountLbl">短窗中</span>
         </div>
         <div class="smentry">
@@ -3317,6 +3318,184 @@ const ICT_LIB = {
 let CURRENT_RANK = 1;
 let CURRENT_MODE = 'high';  // ★ v0.20 戰情室目前主動的訊號類型（high or small）
 
+// ★★★ v0.23 三狙擊鏡：右欄獨立掃描全 5 標的，自動鎖最強 ★★★
+// 戰情室 = 望遠鏡（跟著使用者選的 rank 走）
+// 右欄   = 三狙擊鏡（永遠鎖定全市場最強三訊號，不跟 rank 走）
+
+function pickTopSignal(type, opts) {
+  opts = opts || {};
+  const minScore     = opts.minScore || 0;
+  const preferActive = opts.preferActive || false;
+  let cands = [];
+  for (let i = 1; i <= 5; i++) {
+    const r = RANK_DB[i];
+    if (!r || !r[type]) continue;
+    const s = r[type];
+    if (s.score < minScore) continue;
+    cands.push({ rank: i, sym: r.sym, sig: s, htfBias: r.htfBias });
+  }
+  if (!cands.length) return null;
+  if (preferActive) {
+    cands.sort((a, b) => {
+      const aA = a.sig.status === 'active' ? 1 : 0;
+      const bA = b.sig.status === 'active' ? 1 : 0;
+      if (aA !== bA) return bA - aA;
+      return b.sig.score - a.sig.score;
+    });
+  } else {
+    cands.sort((a, b) => b.sig.score - a.sig.score);
+  }
+  return cands[0];
+}
+
+function _fmtP(p, sym) {
+  if (sym === 'BTC' || sym === 'ETH') return Math.round(p).toLocaleString();
+  if (sym === 'SOL') return p.toFixed(1);
+  if (sym === 'XRP') return p.toFixed(3);
+  if (sym === 'TRX') return p.toFixed(4);
+  return String(p);
+}
+function _calcR(entry, target, slMain) {
+  const r = Math.abs(slMain - entry);
+  if (r === 0) return '-';
+  return (Math.abs(target - entry) / r).toFixed(1) + 'R';
+}
+function _dollarR(entry, sl, sym) { return _fmtP(Math.abs(sl - entry), sym); }
+
+function refreshExecPanel() {
+  // === 1. 高勝率進場卡 = 全標的 .high 最高分 ===
+  const top1 = pickTopSignal('high');
+  if (top1) {
+    const d = top1.sig;
+    const sym = top1.sym;
+    const sideArrow = d.side === 'short' ? '▼' : '▲';
+    const sideColor = d.side === 'short' ? 'var(--red)' : 'var(--green)';
+    const sideTxt   = d.side === 'short' ? '做空' : '做多';
+
+    const $entrySide = document.getElementById('entrySide');
+    if ($entrySide) { $entrySide.textContent = sideTxt; $entrySide.className = 'entry-side ' + d.side; }
+    const $entryCard = document.getElementById('highEntryCard');
+    if ($entryCard) {
+      const $ccLbl = $entryCard.querySelector('.cc-lbl');
+      if ($ccLbl) $ccLbl.innerHTML = sym + ' · ' + d.model + ' <span style="color:' + sideColor + '">' + sideArrow + '</span> <span style="color:var(--text-dim); font-size:10.5px; margin-left:6px; font-weight:600">#' + top1.rank + ' 最強</span>';
+      const $scNum = document.getElementById('scoreNum');
+      if ($scNum) { $scNum.textContent = d.score; $scNum.className = 'card-score-num ' + d.side; }
+      const $scFill = document.getElementById('scoreFill');
+      if ($scFill) { $scFill.style.width = d.score + '%'; $scFill.className = 'score-fill ' + d.side; }
+
+      const $rEntry = $entryCard.querySelector('[data-target-line="entry"] .v');
+      if ($rEntry) $rEntry.textContent = _fmtP(d.entry, sym);
+      const $rSL = $entryCard.querySelector('[data-target-line="sl_main"] .v');
+      if ($rSL) $rSL.textContent = _fmtP(d.slMain, sym) + ' · 1R = ' + _dollarR(d.entry, d.slMain, sym);
+
+      const updTP = (tp, val) => {
+        const items = $entryCard.querySelectorAll('[data-target-line="' + tp + '"]');
+        if (items.length >= 4) {
+          items[1].textContent = _fmtP(val, sym);
+          items[3].textContent = _calcR(d.entry, val, d.slMain).replace('R','');
+        }
+      };
+      updTP('tp1', d.tp1);
+      updTP('tp2', d.tp2);
+      updTP('tp3', d.tp3);
+
+      const $rRR = $entryCard.querySelector('.entry-row:last-child .v');
+      if ($rRR && $rRR.textContent.includes('≈')) {
+        $rRR.textContent = '≈ ' + _calcR(d.entry, d.tp2, d.slMain).replace('R','') + ' : 1 ✓';
+      }
+      const $exeBtn = $entryCard.querySelector('.card-execute-btn');
+      if ($exeBtn) $exeBtn.textContent = '⚡ 立即執行 · ' + sideTxt + ' ' + sym;
+    }
+  }
+
+  // === 2. 軍師卡 = 全標的 .advisor 優先 active + 最高分 ===
+  const top2 = pickTopSignal('advisor', { preferActive: true });
+  if (top2) {
+    const adv = top2.sig;
+    const sym = top2.sym;
+
+    const $advModel = document.getElementById('advModel');
+    if ($advModel) $advModel.textContent = adv.model;
+    const $advSide = document.getElementById('advSide');
+    if ($advSide) { $advSide.textContent = adv.side === 'short' ? '空' : '多'; $advSide.className = 'side-tag ' + adv.side; }
+    const $advScore = document.getElementById('advScore');
+    if ($advScore) {
+      $advScore.innerHTML = adv.score + '<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>';
+      $advScore.className = 'adv-score ' + (adv.score >= 75 ? 'high' : adv.score >= 65 ? 'mid' : 'low');
+    }
+    const $advConds = document.getElementById('advConds');
+    if ($advConds && adv.conditions) {
+      $advConds.innerHTML = adv.conditions.map(c =>
+        '<div class="' + (c.pass ? 'ok' : 'fail') + '">' + c.label + '</div>'
+      ).join('');
+    }
+    const $advFoot = document.querySelector('.adv-foot, .adv-ict-ref');
+    if ($advFoot && adv.chapters) {
+      $advFoot.textContent = 'ICT：' + adv.chapters + ' · #' + top2.rank + ' ' + sym;
+    }
+    const $advAct = document.getElementById('advAction');
+    if ($advAct) {
+      if (adv.status === 'active') {
+        $advAct.innerHTML = '🟢 軍師訊號生效 · ' + sym + ' ' + adv.model + ' · ' + (adv.side === 'short' ? '做空' : '做多') + ' · ' + adv.score + ' 分';
+        $advAct.className = 'adv-action-text go';
+      } else if (adv.status === 'pending') {
+        $advAct.innerHTML = '🟡 軍師待確認 · ' + sym + ' ' + adv.model + ' · 條件未全過';
+        $advAct.className = 'adv-action-text wait';
+      } else {
+        $advAct.innerHTML = '🔴 ' + sym + ' ' + adv.model + ' 訊號已過期 · 撤離模式';
+        $advAct.className = 'adv-action-text no';
+      }
+    }
+  }
+
+  // === 3. 小單卡 = 全標的 .small 最高分 ===
+  const top3 = pickTopSignal('small');
+  if (top3) {
+    const ds = top3.sig;
+    const sym = top3.sym;
+    const smSideArrow = ds.side === 'short' ? '▼' : '▲';
+    const smSideColor = ds.side === 'short' ? 'var(--red)' : 'var(--green)';
+    const smSideTxt   = ds.side === 'short' ? '做空' : '做多';
+
+    const $smentry = document.querySelector('.smentry');
+    if ($smentry) {
+      const smModeColor = ds.score >= 65 ? 'var(--amber)' : 'var(--text-dim)';
+      const $smTitle = $smentry.querySelector('.smentry-title');
+      if ($smTitle) {
+        $smTitle.innerHTML = '⚡ ' + ds.model + ' <span style="color:' + smSideColor + '">' + smSideArrow +
+          '</span> <span style="font-weight:800;font-family:var(--font-mono);color:' + smModeColor + '">' + ds.score +
+          '</span> <span style="color:var(--text-dim);font-size:11px;font-weight:600;margin-left:6px">' + sym + ' · #' + top3.rank + ' 最強</span>';
+      }
+      const upd = (line, val) => {
+        const row = $smentry.querySelector('.sm-row[data-target-line="' + line + '"] .v');
+        if (row) row.textContent = val;
+      };
+      upd('now',       _fmtP(ds.entry, sym));
+      upd('sl_small',  _fmtP(ds.slSmall, sym) + ' · 1R = ' + _dollarR(ds.entry, ds.slSmall, sym));
+      upd('tp1',       _fmtP(ds.tp1, sym) + ' (' + _calcR(ds.entry, ds.tp1, ds.slSmall) + ')');
+      const $smBtn = $smentry.querySelector('.smentry-btn');
+      if ($smBtn) $smBtn.textContent = '⚡ 立即執行小單 · ' + sym + ' ' + smSideTxt;
+    }
+  }
+
+  // === 三狙擊鏡 visible debug bar ===
+  try {
+    let bar = document.getElementById('execPanelDebugBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'execPanelDebugBar';
+      bar.style.cssText = 'position:fixed; bottom:62px; left:50%; transform:translateX(-50%); z-index:999998; padding:8px 14px; border-radius:9px; font:11px var(--font-mono,monospace); font-weight:700; max-width:92vw; pointer-events:none; background:rgba(13,32,52,0.95); color:#79c0ff; border:1px solid #1f6feb; transition:opacity 0.4s;';
+      document.body.appendChild(bar);
+    }
+    bar.textContent = '🎯 三狙擊鏡 · 高=' + (top1?'#'+top1.rank+' '+top1.sym+' '+top1.sig.model+' '+top1.sig.score:'-') +
+                      ' · 師=' + (top2?'#'+top2.rank+' '+top2.sym+' '+top2.sig.model+' '+top2.sig.score:'-') +
+                      ' · 小=' + (top3?'#'+top3.rank+' '+top3.sym+' '+top3.sig.model+' '+top3.sig.score:'-');
+    bar.style.opacity = '1';
+    clearTimeout(window._execDbgT);
+    window._execDbgT = setTimeout(() => { bar.style.opacity = '0'; }, 6500);
+  } catch(e) {}
+}
+
 function promoteRank(n) {
   const r = RANK_DB[n];
   if (!r) return;
@@ -3415,48 +3594,7 @@ function promoteRank(n) {
     ).join('');
   }
 
-  // === 右欄：高勝率進場卡（v0.19f 完整同步）===
-  const $entrySide = document.getElementById('entrySide');
-  if ($entrySide) { $entrySide.textContent = sideTxt; $entrySide.className = 'entry-side ' + d.side; }
-  const $entryCard = document.getElementById('highEntryCard');
-  if ($entryCard) {
-    const $ccLbl = $entryCard.querySelector('.cc-lbl');
-    if ($ccLbl) $ccLbl.innerHTML = d.sym + ' · ' + d.model + ' <span style="color:' + sideColor + '">' + sideArrow + '</span>';
-    const $scNum = document.getElementById('scoreNum');
-    if ($scNum) { $scNum.textContent = d.score; $scNum.className = 'card-score-num ' + d.side; }
-    const $scFill = document.getElementById('scoreFill');
-    if ($scFill) { $scFill.style.width = d.score + '%'; $scFill.className = 'score-fill ' + d.side; }
-
-    // ★★ v0.19f 右欄進場價 ★★
-    const $rEntry = $entryCard.querySelector('[data-target-line="entry"] .v');
-    if ($rEntry) $rEntry.textContent = fmtPrice(d.entry, d.sym);
-
-    // ★★ v0.19f 右欄止損 + 1R ★★
-    const $rSL = $entryCard.querySelector('[data-target-line="sl_main"] .v');
-    if ($rSL) $rSL.textContent = fmtPrice(d.slMain, d.sym) + ' · 1R = ' + dollarR(d.entry, d.slMain);
-
-    // ★★ v0.19f 右欄 TP1/2/3 價位 + R 倍數 ★★
-    const updateTP = (tp, val) => {
-      const items = $entryCard.querySelectorAll('[data-target-line="' + tp + '"]');
-      if (items.length >= 4) {
-        items[1].textContent = fmtPrice(val, d.sym);                // 價位
-        items[3].textContent = calcR(d.entry, val, d.slMain).replace('R',''); // R:R
-      }
-    };
-    updateTP('tp1', d.tp1);
-    updateTP('tp2', d.tp2);
-    updateTP('tp3', d.tp3);
-
-    // ★★ v0.19f 右欄綜合 R:R 至 TP2 ★★
-    const $rRR = $entryCard.querySelector('.entry-row:last-child .v');
-    if ($rRR && $rRR.textContent.includes('≈')) {
-      $rRR.textContent = '≈ ' + calcR(d.entry, d.tp2, d.slMain).replace('R','') + ' : 1 ✓';
-    }
-
-    // ★★ v0.19f 右欄立即執行按鈕文字 ★★
-    const $exeBtn = $entryCard.querySelector('.card-execute-btn');
-    if ($exeBtn) $exeBtn.textContent = '⚡ 立即執行 · ' + sideTxt + ' ' + d.sym;
-  }
+  // === [v0.23 已搬移到 refreshExecPanel - 高勝率卡不再跟戰情室 rank 走] ===
 
   // ★★ v0.20 K 線方向 badge（修問題 7：long/short 訊號醒目化）★★
   const $dirBadge = document.getElementById('wrDirBadge');
@@ -3484,71 +3622,9 @@ function promoteRank(n) {
   } catch(e) { console.warn('svg sync skip', e); }
 
 
-  // === 右欄：軍師卡（v0.21 → 用 advisor 獨立訊號 + 動態 conditions list）===
-  const adv = r.advisor;  // 軍師卡專屬訊號（每標的獨立）
-  adv.sym = r.sym;
+  // === [v0.23 已搬移到 refreshExecPanel - 軍師卡不再跟戰情室 rank 走] ===
 
-  const $advModel = document.getElementById('advModel');
-  if ($advModel) $advModel.textContent = adv.model;
-  const $advSide = document.getElementById('advSide');
-  if ($advSide) { $advSide.textContent = adv.side === 'short' ? '空' : '多'; $advSide.className = 'side-tag ' + adv.side; }
-  const $advScore = document.getElementById('advScore');
-  if ($advScore) {
-    $advScore.innerHTML = adv.score + '<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>';
-    $advScore.className = 'adv-score ' + (adv.score >= 75 ? 'high' : adv.score >= 65 ? 'mid' : 'low');
-  }
-
-  // ★ v0.21 軍師卡 conditions 清單動態渲染 ★
-  const $advConds = document.getElementById('advConds');
-  if ($advConds && adv.conditions) {
-    $advConds.innerHTML = adv.conditions.map(c =>
-      '<div class="' + (c.pass ? 'ok' : 'fail') + '">' + c.label + '</div>'
-    ).join('');
-  }
-
-  // ★ v0.21 軍師卡 ICT 章節同步 ★
-  const $advFoot = document.querySelector('.adv-foot, .adv-ict-ref');
-  if ($advFoot && adv.chapters) {
-    $advFoot.textContent = 'ICT：' + adv.chapters;
-  }
-
-  // ★ v0.21 軍師卡狀態（active/pending/expired）★
-  const $advAct = document.getElementById('advAction');
-  if ($advAct) {
-    if (adv.status === 'active') {
-      $advAct.innerHTML = '🟢 軍師訊號生效 · ' + adv.model + ' · ' + (adv.side === 'short' ? '做空' : '做多') + ' · ' + adv.score + ' 分';
-      $advAct.className = 'adv-action-text go';
-    } else if (adv.status === 'pending') {
-      $advAct.innerHTML = '🟡 軍師待確認 · ' + adv.model + ' · 條件未全過';
-      $advAct.className = 'adv-action-text wait';
-    } else {
-      $advAct.innerHTML = '🔴 訊號已過期 · 撤離模式';
-      $advAct.className = 'adv-action-text no';
-    }
-  }
-
-  // === 底部小單卡（v0.20 → 完整用 ds = small 訊號，跟戰情室分開）===
-  const $smentry = document.querySelector('.smentry');
-  if ($smentry) {
-    const smModeColor = ds.score >= 65 ? 'var(--amber)' : 'var(--text-dim)';
-    const $smTitle = $smentry.querySelector('.smentry-title');
-    if ($smTitle) {
-      $smTitle.innerHTML = '⚡ ' + ds.model + ' <span style="color:' + smSideColor + '">' + smSideArrow +
-        '</span> <span style="font-weight:800;font-family:var(--font-mono);color:' + smModeColor + '">' + ds.score +
-        '</span> <span style="color:var(--text-dim);font-size:11px;font-weight:600;margin-left:6px">' + r.sym + ' · 獨立</span>';
-    }
-    // 小單卡：當下進場 / 緊止損 / 1R 平倉
-    const updSmRow = (line, val, suffix) => {
-      const row = $smentry.querySelector('.sm-row[data-target-line="' + line + '"] .v');
-      if (row) row.textContent = val + (suffix || '');
-    };
-    updSmRow('now',       fmtPrice(ds.entry, r.sym));
-    updSmRow('sl_small',  fmtPrice(ds.slSmall, r.sym) + ' · 1R = ' + dollarR(ds.entry, ds.slSmall));
-    updSmRow('tp1',       fmtPrice(ds.tp1, r.sym) + ' (' + calcR(ds.entry, ds.tp1, ds.slSmall) + ')');
-    // 小單卡：執行按鈕
-    const $smBtn = $smentry.querySelector('.smentry-btn');
-    if ($smBtn) $smBtn.textContent = '⚡ 立即執行小單 · ' + r.sym + ' ' + smSideTxt;
-  }
+  // === [v0.23 已搬移到 refreshExecPanel - 小單卡不再跟戰情室 rank 走] ===
 
   // === 排位賽卡 highlight ===
   document.querySelectorAll('.rr-card').forEach(c => c.classList.remove('current'));
@@ -4039,6 +4115,11 @@ window.addEventListener('load', () => {
 
   document.getElementById('freshTime').textContent = SIG.signalTimeStr;
   document.getElementById('advTime').textContent = SIG.signalTimeStr;
+
+  // ★★ v0.23 init：右欄 3 卡獨立掃描，鎖定全市場最強 ★★
+  setTimeout(() => {
+    try { refreshExecPanel(); } catch(e) { console.error('refreshExecPanel init err', e); }
+  }, 250);
 });
 
 // ★★★★ v0.13.1 按鈕救生圈 ★★★★
