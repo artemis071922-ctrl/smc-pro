@@ -507,27 +507,61 @@ body {
 }
 .rs-card:hover { background: var(--bg-3); border-color: rgba(0,255,255,0.4); }
 
-/* ★★ v0.25.5 持倉中徽章（疊在排位卡右上角，金色） ★★ */
-.rs-hold-badge {
-  position: absolute;
-  top: 4px; right: 4px;
-  background: linear-gradient(135deg, #FFD700, #FFA500);
-  color: #000;
-  font-size: 10px; font-weight: 900;
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid rgba(255,215,0,0.9);
-  box-shadow: 0 0 8px rgba(255,165,0,0.5);
-  z-index: 10;
-  letter-spacing: 0.3px;
-  animation: hold-badge-pulse 2.4s ease-in-out infinite;
+/* ★★ v0.25.6 標記模式：排位卡邊框變綠 + 右下角小標籤（不擋分數） ★★ */
+.rs-card.has-position {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 12px rgba(63,185,80,0.25);
+  background: linear-gradient(180deg, rgba(63,185,80,0.06), var(--bg)) !important;
 }
-@keyframes hold-badge-pulse {
-  0%, 100% { box-shadow: 0 0 6px rgba(255,165,0,0.5); transform: scale(1); }
-  50%      { box-shadow: 0 0 14px rgba(255,165,0,0.9); transform: scale(1.05); }
+.rs-card.has-position::after {
+  content: '🎯 執行中';
+  position: absolute;
+  bottom: 38px;  /* 在按鈕上面、分數下面 */
+  right: 6px;
+  font-size: 9px;
+  color: var(--green);
+  background: rgba(63,185,80,0.15);
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--green);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  z-index: 3;
+}
+.rs-card.has-position[data-hold-type="small"]::after {
+  content: '⚡ 小單';
+  color: var(--amber);
+  background: rgba(251,192,45,0.15);
+  border-color: var(--amber);
 }
 
-/* 持倉中按鈕：綠光持續脈動，告訴用戶「再按 = 平倉」 */
+/* × 取消按鈕（按鈕內嵌） */
+.hold-x-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  margin-left: 10px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.hold-x-btn:hover { 
+  background: rgba(248,81,73,0.7); 
+  border-color: rgba(255,255,255,0.6);
+  transform: scale(1.1);
+}
+.hold-x-btn.rs-x {
+  width: 18px; height: 18px; font-size: 12px; margin-left: 4px;
+}
+
+/* 執行中按鈕：綠光持續脈動 */
 .card-execute-btn.executed,
 .smentry-btn.executed-sync,
 .rs-exec.executed {
@@ -540,6 +574,96 @@ body {
   0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0.35); }
   50%      { box-shadow: 0 0 18px 5px rgba(63,185,80,0.20); }
 }
+
+/* ★★ v0.25.6 復盤面板樣式 ★★ */
+.recap-card {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw; max-width: 720px;
+  max-height: 85vh;
+  background: var(--bg-2);
+  border: 2px solid var(--green);
+  border-radius: 12px;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+  z-index: 9999;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.recap-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px;
+  background: rgba(63,185,80,0.12);
+  border-bottom: 1px solid var(--border);
+}
+.recap-title { font-size: 18px; font-weight: 900; color: var(--green); }
+.recap-close { 
+  font-size: 22px; cursor: pointer; color: var(--text-dim);
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; transition: all 0.15s;
+}
+.recap-close:hover { background: rgba(248,81,73,0.3); color: #fff; }
+.recap-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; padding: 14px 18px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+}
+.recap-stats > div {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+}
+.recap-stats b { font-size: 22px; font-weight: 900; color: var(--green); font-family: var(--font-mono); }
+.recap-stats span { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.recap-tabs {
+  display: flex; gap: 8px; padding: 10px 18px 0;
+}
+.recap-tab {
+  background: var(--bg-3); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: 12px; font-weight: 700;
+  padding: 6px 12px; border-radius: 6px; cursor: pointer;
+}
+.recap-tab.active { background: var(--green); color: #000; border-color: var(--green); }
+.recap-list {
+  flex: 1; overflow-y: auto;
+  padding: 10px 18px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.recap-item {
+  background: var(--bg-3); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px;
+  font-size: 12px;
+}
+.recap-row1 {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.recap-time { font-family: var(--font-mono); color: var(--text-dim); }
+.recap-sym { font-weight: 900; color: var(--text); }
+.recap-model { font-weight: 700; }
+.recap-score { 
+  font-family: var(--font-mono); font-weight: 900; color: var(--amber);
+  background: rgba(251,192,45,0.15); padding: 1px 6px; border-radius: 4px;
+}
+.recap-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+.recap-tag.green { background: rgba(63,185,80,0.18); color: var(--green); border: 1px solid var(--green); }
+.recap-row2 {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 6px;
+}
+.recap-outcome { font-weight: 700; font-size: 11px; }
+.recap-fill-btn {
+  background: var(--bg); border: 1px solid var(--amber); color: var(--amber);
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; cursor: pointer;
+}
+.recap-fill-btn:hover { background: var(--amber); color: #000; }
+.recap-actions {
+  display: flex; gap: 10px; padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-3);
+}
+.recap-actions .btn { flex: 1; }
 .rs-card.active {
   background: linear-gradient(180deg, rgba(0,255,255,0.10), rgba(0,255,255,0.04));
   border-color: var(--cyan);
@@ -2122,7 +2246,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.25 · 完工潤飾 + 型態趨勢線 + 持倉直覺化</span></div>
+    <div class="logo">smc-pro<span class="v">v0.25 · 完工潤飾 + 型態趨勢線 + 標記模式 + 自動復盤 + 按鈕修復</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2135,6 +2259,7 @@ body {
     <button class="btn small-trade" onclick="connectRank(4); triggerSignal('10_idm','long',68);">⚡ 小單訊號</button>
     <button class="btn" onclick="resetSignal()">⟳ 重置</button>
     <button class="btn" id="soundToggleBtn" onclick="toggleSound()" title="切換鈴聲開關" style="min-width:38px; padding:6px 10px">🔔</button>
+    <button class="btn" onclick="openRecapPanel()" title="今日復盤" style="background:rgba(63,185,80,0.15); border-color:var(--green); color:var(--green); font-weight:700">📜 復盤</button>
   </header>
 
   <!-- ★ v0.17 七條件內建燈號條（取代下方 LED + 全過 banner）★ -->
@@ -2174,7 +2299,7 @@ body {
         <span class="rs-time">+03:17 / 5:00</span>
       </div>
       <div class="rs-bar"><div class="rs-fill" style="width:66%;background:#ff6855"></div></div>
-      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade()">⚡ 立即執行 → 開倉</button>
+      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade('rank', this.closest('.rs-card').dataset.rank)">⚡ 立即執行 → 開倉</button>
     </div>
     <div class="rs-card" data-rank="2" data-sym="ETH" onclick="connectRank(2)">
       <div class="rs-head">
@@ -2191,7 +2316,7 @@ body {
         <span class="rs-time">+01:25 / 5:00</span>
       </div>
       <div class="rs-bar"><div class="rs-fill" style="width:28%;background:#ff6855"></div></div>
-      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade()">⚡ 立即執行 → 開倉</button>
+      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade('rank', this.closest('.rs-card').dataset.rank)">⚡ 立即執行 → 開倉</button>
     </div>
     <div class="rs-card" data-rank="3" data-sym="SOL" onclick="connectRank(3)">
       <div class="rs-head">
@@ -2208,7 +2333,7 @@ body {
         <span class="rs-time">+00:42 / 2:00</span>
       </div>
       <div class="rs-bar"><div class="rs-fill" style="width:35%;background:var(--amber)"></div></div>
-      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade()">⚡ 立即執行 → 開倉</button>
+      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade('rank', this.closest('.rs-card').dataset.rank)">⚡ 立即執行 → 開倉</button>
     </div>
     <div class="rs-card" data-rank="4" data-sym="XRP" onclick="connectRank(4)">
       <div class="rs-head">
@@ -2225,7 +2350,7 @@ body {
         <span class="rs-time">+01:12 / 2:00</span>
       </div>
       <div class="rs-bar"><div class="rs-fill" style="width:60%;background:var(--amber)"></div></div>
-      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade()">⚡ 立即執行 → 開倉</button>
+      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade('rank', this.closest('.rs-card').dataset.rank)">⚡ 立即執行 → 開倉</button>
     </div>
     <div class="rs-card" data-rank="5" data-sym="TRX" onclick="connectRank(5)">
       <div class="rs-head">
@@ -2242,7 +2367,7 @@ body {
         <span class="rs-time">監測中</span>
       </div>
       <div class="rs-bar"><div class="rs-fill" style="width:0%"></div></div>
-      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade()">⚡ 立即執行 → 開倉</button>
+      <button class="rs-exec" onclick="event.stopPropagation(); execHighTrade('rank', this.closest('.rs-card').dataset.rank)">⚡ 立即執行 → 開倉</button>
     </div>
   </nav>
 
@@ -2666,7 +2791,7 @@ body {
           </div>
 
           <div class="adv-buttons">
-            <button class="btn adv-execute" onclick="execHighTrade()">⚡ 立即執行</button>
+            <button class="btn adv-execute" onclick="execAdvisorTrade()">⚡ 立即執行</button>
             <button class="btn" onclick="runChecklist()">七條件</button>
             <button class="btn" onclick="askAdvisor()">問軍師</button>
           </div>
@@ -3248,7 +3373,7 @@ function showAlertCard(type, model, side, score, sym) {
 
   // 綁定按鈕
   card.querySelector('[data-action="exec"]').addEventListener('click', () => {
-    execHighTrade();
+    execHighTrade('execpanel');  // v0.25.7 alert card 顯示全市場最強，用 execpanel
     card.classList.add('alert-fadeout');
     setTimeout(() => card.remove(), 400);
   });
@@ -3303,10 +3428,7 @@ function execSmallTrade(source) {
   if (EXECUTED_SIGNALS.small &&
       EXECUTED_SIGNALS.small.sym === sym &&
       EXECUTED_SIGNALS.small.model === sig.model) {
-    EXECUTED_SIGNALS.small = null;
-    prependAlert(fmtTime(new Date()), '↩ <span class="em">' + sym + ' ' + sig.model + ' 小單已平倉</span>');
-    showToast('↩ ' + sym + ' ' + sig.model + ' 小單已平倉', 'normal');
-    refreshExecPanel();
+    showToast('🎯 ' + sym + ' ' + sig.model + ' 小單執行中 · 點右側 × 可取消', 'normal');
     return;
   }
 
@@ -3328,8 +3450,9 @@ function execSmallTrade(source) {
 // 不再用 EXECUTED_RANK（會耦合）。改用「訊號 ID」追蹤實際持倉。
 // 未來接 OKX 時，這個物件直接由 API 倉位資料填入。
 let EXECUTED_SIGNALS = {
-  high:  null,  // {rank, sym, model, side, score, ts, ...}
-  small: null
+  high:    null,  // {rank, sym, model, side, score, ts, ...}
+  small:   null,
+  advisor: null   // v0.25.7 軍師卡獨立執行槽
 };
 
 // 兩訊號是否相同（sym + model + side 三鍵）
@@ -3346,7 +3469,63 @@ function repaintRankCards() {
 
 // ★★ v0.16 立即執行 - 轉換戰情室畫面為「已執行 · 持倉中」狀態 ★★
 // v0.24 改造：source 區分上排排位卡 / 右欄三狙擊鏡
-function execHighTrade(source) {
+// ★★ v0.25.7 軍師卡專屬執行函式（執行軍師訊號，不是戰情室訊號）★★
+function execAdvisorTrade() {
+  const top = pickTopSignal('advisor', { preferActive: true });
+  if (!top) {
+    showToast('⚠️ 目前無軍師訊號可執行', 'warn');
+    return;
+  }
+  const sig = top.sig;
+  const sym = top.sym;
+  
+  // 已執行 → 提示
+  if (EXECUTED_SIGNALS.advisor &&
+      EXECUTED_SIGNALS.advisor.sym === sym &&
+      EXECUTED_SIGNALS.advisor.model === sig.model) {
+    showToast('🎯 軍師 ' + sym + ' ' + sig.model + ' 執行中 · 點軍師卡按鈕 × 可取消', 'normal');
+    return;
+  }
+  
+  EXECUTED_SIGNALS.advisor = {
+    sym, model: sig.model, side: sig.side, score: sig.score,
+    chapters: sig.chapters, ts: Date.now()
+  };
+  
+  // SIGNAL_LOG 記錄
+  recordSignal({
+    sym, model: sig.model, side: sig.side, score: sig.score,
+    chapters: sig.chapters, type: 'advisor_executed'
+  });
+  markSignalExecuted(sym, sig.model);
+  
+  prependAlert(fmtTime(new Date()), '🎯 <span class="em">軍師 ' + sym + ' ' + sig.model + ' 已執行</span> · ' + sig.score + ' 分');
+  showToast('🎯 軍師訊號 ' + sym + ' ' + sig.model + ' · ' + sig.score + ' 分 · 執行中', 'normal');
+  
+  refreshExecPanel();
+}
+
+function unmarkAdvisorTrade() {
+  if (!EXECUTED_SIGNALS.advisor) return;
+  const sym = EXECUTED_SIGNALS.advisor.sym;
+  const model = EXECUTED_SIGNALS.advisor.model;
+  try {
+    let log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]');
+    const idx = log.findIndex(e => e.sym === sym && e.model === model && e.executed_by_user && !e.outcome);
+    if (idx >= 0) {
+      log[idx].unmarked_at = new Date().toISOString();
+      log[idx].outcome = 'user_cancelled';
+      log[idx].closed_at = new Date().toISOString();
+      localStorage.setItem(SIGNAL_LOG_KEY, JSON.stringify(log));
+    }
+  } catch(e) {}
+  EXECUTED_SIGNALS.advisor = null;
+  refreshExecPanel();
+  prependAlert(fmtTime(new Date()), '↩ <span class="em">軍師 ' + sym + ' ' + model + ' 取消</span>');
+  showToast('↩ 軍師訊號取消', 'normal');
+}
+
+function execHighTrade(source, rankNum) {
   source = source || 'warroom';
   let sig, rank, sym;
 
@@ -3355,40 +3534,25 @@ function execHighTrade(source) {
     const top = pickTopSignal('high');
     if (!top) { showToast('無高勝率訊號可執行', 'warn'); return; }
     sig = top.sig; rank = top.rank; sym = top.sym;
+  } else if (source === 'rank' && rankNum) {
+    // ★ v0.25.7 排位卡按鈕：執行該排位卡顯示的訊號 ★
+    rank = parseInt(rankNum);
+    const d = RANK_DB[rank];
+    if (!d) { showToast('排位資料不存在', 'warn'); return; }
+    sig = d.high; sym = d.sym;
   } else {
-    // 上排排位卡 / 戰情室執行 → 拿當前 rank
+    // warroom / 戰情室 → 拿當前 CURRENT_RANK
     rank = CURRENT_RANK;
     const d = RANK_DB[rank];
     if (!d) return;
     sig = d.high; sym = d.sym;
   }
 
-  // v0.25 Toggle：同訊號再按一次 = 取消執行
+  // v0.25.6 標記模式：已執行不 toggle · 點主按鈕只顯示提示，× 取消另外按
   if (EXECUTED_SIGNALS.high &&
       EXECUTED_SIGNALS.high.sym === sym &&
       EXECUTED_SIGNALS.high.model === sig.model) {
-    EXECUTED_SIGNALS.high = null;
-    // 戰情室還原
-    const $warroom = document.querySelector('.warroom');
-    if ($warroom) $warroom.classList.remove('executed');
-    const $tier = document.querySelector('.wr-tier');
-    if ($tier && $tier.dataset.origText) {
-      $tier.textContent = $tier.dataset.origText;
-      $tier.style.background = $tier.dataset.origBg || '';
-      $tier.style.color = $tier.dataset.origColor || '';
-      delete $tier.dataset.origText;
-      delete $tier.dataset.origBg;
-      delete $tier.dataset.origColor;
-    }
-    document.querySelectorAll('.wd-cell.entry').forEach(c => c.classList.remove('executed'));
-    document.querySelectorAll('.wd-btn.execute').forEach(b => {
-      if (b.dataset.origText) { b.textContent = b.dataset.origText; delete b.dataset.origText; }
-      b.classList.remove('executed');
-    });
-    prependAlert(fmtTime(new Date()), '↩ <span class="em">' + sym + ' ' + sig.model + ' 已平倉</span>');
-    showToast('↩ ' + sym + ' ' + sig.model + ' 已平倉 · 倉位回到等待狀態', 'normal');
-    repaintRankCards();
-    refreshExecPanel();
+    showToast('🎯 ' + sym + ' ' + sig.model + ' 執行中 · 點右側 × 可取消', 'normal');
     return;
   }
 
@@ -3432,9 +3596,240 @@ function execHighTrade(source) {
 }
 
 // 還原「已執行」狀態（被 resetSignal 或 connectRank 在切換標的時呼叫）
+// ★★ v0.25.6 取消標記函式（× 按鈕用）★★
+function unmarkHighTrade() {
+  if (!EXECUTED_SIGNALS.high) return;
+  const sym = EXECUTED_SIGNALS.high.sym;
+  const model = EXECUTED_SIGNALS.high.model;
+  // SIGNAL_LOG 記錄取消
+  try {
+    let log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]');
+    const idx = log.findIndex(e => e.sym === sym && e.model === model && e.executed_by_user && !e.outcome);
+    if (idx >= 0) {
+      log[idx].unmarked_at = new Date().toISOString();
+      log[idx].outcome = 'user_cancelled';
+      log[idx].closed_at = new Date().toISOString();
+      localStorage.setItem(SIGNAL_LOG_KEY, JSON.stringify(log));
+    }
+  } catch(e) {}
+  EXECUTED_SIGNALS.high = null;
+  applyExecutedVisuals();
+  refreshExecPanel();
+  prependAlert(fmtTime(new Date()), '↩ <span class="em">' + sym + ' ' + model + ' 取消執行</span>');
+  showToast('↩ ' + sym + ' ' + model + ' 取消執行', 'normal');
+}
+
+function unmarkSmallTrade() {
+  if (!EXECUTED_SIGNALS.small) return;
+  const sym = EXECUTED_SIGNALS.small.sym;
+  const model = EXECUTED_SIGNALS.small.model;
+  try {
+    let log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]');
+    const idx = log.findIndex(e => e.sym === sym && e.model === model && e.executed_by_user && !e.outcome);
+    if (idx >= 0) {
+      log[idx].unmarked_at = new Date().toISOString();
+      log[idx].outcome = 'user_cancelled';
+      log[idx].closed_at = new Date().toISOString();
+      localStorage.setItem(SIGNAL_LOG_KEY, JSON.stringify(log));
+    }
+  } catch(e) {}
+  EXECUTED_SIGNALS.small = null;
+  applyExecutedVisuals();
+  refreshExecPanel();
+  prependAlert(fmtTime(new Date()), '↩ <span class="em">' + sym + ' ' + model + ' 小單取消</span>');
+  showToast('↩ ' + sym + ' ' + model + ' 小單取消', 'normal');
+}
+
+// ★★ v0.25.6 自動結算引擎：每 30 秒掃描 SIGNAL_LOG，過期訊號自動結算 ★★
+setInterval(() => {
+  try {
+    let log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]');
+    let updated = false;
+    const now = Date.now();
+    log.forEach(entry => {
+      if (entry.outcome) return; // 已結算跳過
+      const entryTime = new Date(entry.timestamp).getTime();
+      const expiryMs = (entry.type === 'small') ? 120000 : 300000;
+      const elapsed = now - entryTime;
+      // 過期 1 分鐘後自動結算（保留一點 grace period 等用戶反應）
+      if (elapsed > expiryMs + 60000) {
+        entry.outcome = entry.executed_by_user ? 'expired_user_marked' : 'expired_unmarked';
+        entry.closed_at = new Date().toISOString();
+        entry.actual_r = null; // 待 Phase B 自動填，或手動補
+        entry.note = 'Phase A 自動結算 · 需手動補 TP/SL 結果';
+        updated = true;
+      }
+    });
+    if (updated) {
+      localStorage.setItem(SIGNAL_LOG_KEY, JSON.stringify(log));
+    }
+  } catch(e) {}
+}, 30000);
+
+// ★★ v0.25.6 復盤面板 ★★
+function openRecapPanel() {
+  document.querySelectorAll('.recap-card').forEach(c => c.remove());
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]'); } catch(e) {}
+  const oneDayAgo = Date.now() - 86400000;
+  const todayLog = log.filter(e => new Date(e.timestamp).getTime() > oneDayAgo);
+  
+  const total = todayLog.length;
+  const marked = todayLog.filter(e => e.executed_by_user).length;
+  const settled = todayLog.filter(e => e.outcome).length;
+  const tpWins = todayLog.filter(e => e.outcome && e.outcome.startsWith('tp')).length;
+  const slLoss = todayLog.filter(e => e.outcome === 'sl').length;
+  const winRate = (tpWins + slLoss > 0) ? Math.round(tpWins / (tpWins + slLoss) * 100) : null;
+  
+  const card = document.createElement('div');
+  card.className = 'recap-card';
+  card.innerHTML = 
+    '<div class="recap-header">' +
+      '<span class="recap-title">📜 今日復盤 · ' + new Date().toLocaleDateString('zh-TW') + '</span>' +
+      '<span class="recap-close" onclick="closeRecap()">✕</span>' +
+    '</div>' +
+    '<div class="recap-stats">' +
+      '<div><b>' + total + '</b><span>訊號總數</span></div>' +
+      '<div><b>' + marked + '</b><span>你跟單數</span></div>' +
+      '<div><b>' + settled + '</b><span>已結算</span></div>' +
+      '<div><b>' + (winRate !== null ? winRate + '%' : '—') + '</b><span>勝率</span></div>' +
+    '</div>' +
+    '<div class="recap-tabs">' +
+      '<button class="recap-tab active" data-filter="all" onclick="recapFilter(\'all\', this)">全部 ' + total + '</button>' +
+      '<button class="recap-tab" data-filter="marked" onclick="recapFilter(\'marked\', this)">你跟單 ' + marked + '</button>' +
+      '<button class="recap-tab" data-filter="settled" onclick="recapFilter(\'settled\', this)">已結算 ' + settled + '</button>' +
+      '<button class="recap-tab" data-filter="pending" onclick="recapFilter(\'pending\', this)">進行中 ' + (total - settled) + '</button>' +
+    '</div>' +
+    '<div class="recap-list" id="recapList"></div>' +
+    '<div class="recap-actions">' +
+      '<button class="btn" onclick="exportSignalLog()" style="background:rgba(88,166,255,0.15); border-color:#58A6FF; color:#58A6FF">💾 匯出 JSON</button>' +
+      '<button class="btn" onclick="clearSignalLog()" style="background:rgba(248,81,73,0.15); border-color:var(--red); color:var(--red)">🗑️ 清空</button>' +
+    '</div>';
+  document.body.appendChild(card);
+  renderRecapList(todayLog, 'all');
+}
+
+function renderRecapList(logs, filter) {
+  let filtered = logs;
+  if (filter === 'marked') filtered = logs.filter(e => e.executed_by_user);
+  else if (filter === 'settled') filtered = logs.filter(e => e.outcome);
+  else if (filter === 'pending') filtered = logs.filter(e => !e.outcome);
+  
+  const $list = document.getElementById('recapList');
+  if (!$list) return;
+  
+  if (filtered.length === 0) {
+    $list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim)">⊘ 此分類無訊號記錄</div>';
+    return;
+  }
+  
+  const outcomeMap = {
+    'tp1': { txt: '🎯 TP1 命中', color: 'var(--green)' },
+    'tp2': { txt: '🎯 TP2 命中', color: 'var(--green)' },
+    'tp3': { txt: '🎯 TP3 命中', color: 'var(--green)' },
+    'sl':  { txt: '🛑 觸發停損', color: 'var(--red)' },
+    'proactive_exit': { txt: '⏭ 提前出場', color: 'var(--amber)' },
+    'expired_user_marked': { txt: '⏰ 已過期（你跟了）', color: 'var(--text-dim)' },
+    'expired_unmarked':    { txt: '⏰ 已過期（未跟）',  color: 'var(--text-dim)' },
+    'user_cancelled': { txt: '↩ 你已取消', color: 'var(--text-dim)' }
+  };
+  
+  $list.innerHTML = filtered.map(e => {
+    const time = new Date(e.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const sideColor = e.side === 'short' ? 'var(--red)' : 'var(--green)';
+    const sideArrow = e.side === 'short' ? '▼' : '▲';
+    const oc = e.outcome ? outcomeMap[e.outcome] : { txt: '⏳ 進行中', color: 'var(--amber)' };
+    const markedBadge = e.executed_by_user ? '<span class="recap-tag green">⭐ 跟了</span>' : '';
+    const rText = e.actual_r !== null && e.actual_r !== undefined ? ' · ' + (e.actual_r > 0 ? '+' : '') + e.actual_r + 'R' : '';
+    const fillBtn = (!e.outcome || e.outcome.startsWith('expired')) ? 
+      '<button class="recap-fill-btn" onclick="openManualFill(\'' + e.id + '\')">📝 補填結果</button>' : '';
+    
+    return '<div class="recap-item">' +
+      '<div class="recap-row1">' +
+        '<span class="recap-time">' + time + '</span>' +
+        '<span class="recap-sym">' + e.sym + '</span>' +
+        '<span class="recap-model" style="color:' + sideColor + '">' + e.model + ' ' + sideArrow + '</span>' +
+        '<span class="recap-score">' + (e.score || '-') + '</span>' +
+        markedBadge +
+      '</div>' +
+      '<div class="recap-row2">' +
+        '<span class="recap-outcome" style="color:' + oc.color + '">' + oc.txt + rText + '</span>' +
+        fillBtn +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function recapFilter(filter, btn) {
+  document.querySelectorAll('.recap-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]'); } catch(e) {}
+  const oneDayAgo = Date.now() - 86400000;
+  const todayLog = log.filter(e => new Date(e.timestamp).getTime() > oneDayAgo);
+  renderRecapList(todayLog, filter);
+}
+
+function closeRecap() {
+  document.querySelectorAll('.recap-card').forEach(c => c.remove());
+}
+
+function exportSignalLog() {
+  try {
+    const log = localStorage.getItem(SIGNAL_LOG_KEY) || '[]';
+    const filename = 'smc-pro-log-' + new Date().toISOString().slice(0,10) + '.json';
+    const blob = new Blob([log], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('💾 已匯出 ' + filename, 'normal');
+  } catch(e) {
+    showToast('匯出失敗：' + e.message, 'warn');
+  }
+}
+
+function clearSignalLog() {
+  if (!confirm('⚠️ 確定清空所有訊號記錄？\n建議先按「💾 匯出 JSON」備份')) return;
+  localStorage.removeItem(SIGNAL_LOG_KEY);
+  closeRecap();
+  showToast('🗑️ 訊號記錄已清空', 'warn');
+}
+
+function openManualFill(id) {
+  const outcome = prompt('輸入結果代碼：\ntp1 / tp2 / tp3 / sl / proactive_exit\n(TP1命中 / TP2命中 / TP3命中 / 停損 / 提前出場)');
+  if (!outcome) return;
+  const validOutcomes = ['tp1','tp2','tp3','sl','proactive_exit'];
+  if (!validOutcomes.includes(outcome)) {
+    showToast('❌ 無效的結果代碼', 'warn');
+    return;
+  }
+  const actualR = prompt('輸入實際 R 倍數\n(獲利如 +1.5, 虧損如 -1.0)');
+  if (actualR === null) return;
+  
+  try {
+    let log = JSON.parse(localStorage.getItem(SIGNAL_LOG_KEY) || '[]');
+    const idx = log.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      log[idx].outcome = outcome;
+      log[idx].actual_r = actualR ? parseFloat(actualR) : null;
+      log[idx].closed_at = new Date().toISOString();
+      log[idx].note = '手動補填';
+      localStorage.setItem(SIGNAL_LOG_KEY, JSON.stringify(log));
+      closeRecap();
+      openRecapPanel();
+      showToast('✅ 已補填結果', 'normal');
+    }
+  } catch(e) {
+    showToast('補填失敗：' + e.message, 'warn');
+  }
+}
+
 function clearExecutedState() {
   EXECUTED_SIGNALS.high = null;
   EXECUTED_SIGNALS.small = null;
+  EXECUTED_SIGNALS.advisor = null;
   // v0.25.5 統一視覺套用
   applyExecutedVisuals();
 }
@@ -3443,14 +3838,14 @@ function clearExecutedState() {
 // 所有「已執行」視覺都由這個函式根據 EXECUTED_SIGNALS 真實狀態套用
 // 切換戰情室、refreshExecPanel、repaintRankCards 都呼叫它
 function applyExecutedVisuals() {
-  // === A. 上方 5 排位卡：加金色「💰 持倉」徽章疊加 + 按鈕同步 ===
+  // === A. 上方 5 排位卡：邊框變綠 + 右下角小標籤 ===
   for (let i = 1; i <= 5; i++) {
     const card = document.querySelector('.rs-card[data-rank="' + i + '"]');
     if (!card) continue;
     const r = RANK_DB[i];
     if (!r) continue;
 
-    // 移除舊徽章
+    // 移除舊徽章（v0.25.5 遺物）
     const $oldBadge = card.querySelector('.rs-hold-badge');
     if ($oldBadge) $oldBadge.remove();
 
@@ -3463,19 +3858,24 @@ function applyExecutedVisuals() {
     const hasHold = highHold || smallHold;
 
     if (hasHold) {
-      const badge = document.createElement('div');
-      badge.className = 'rs-hold-badge';
-      badge.textContent = highHold ? '💰 持倉中' : '⚡ 小單持倉';
-      card.appendChild(badge);
+      card.classList.add('has-position');
+      card.dataset.holdType = highHold ? 'high' : 'small';
+    } else {
+      card.classList.remove('has-position');
+      delete card.dataset.holdType;
     }
 
     const btn = card.querySelector('.rs-exec');
     if (btn) {
       if (highHold) {
-        btn.textContent = '📍 持倉中 · 點我平倉';
+        btn.innerHTML = '<span style="flex:1; text-align:center">🎯 執行中</span>' +
+                        '<span class="hold-x-btn rs-x" onclick="event.stopPropagation(); unmarkHighTrade();" title="取消">×</span>';
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
         btn.classList.add('executed');
       } else {
         btn.textContent = '⚡ 立即執行 → 開倉';
+        btn.style.display = '';
         btn.classList.remove('executed');
       }
     }
@@ -3497,7 +3897,7 @@ function applyExecutedVisuals() {
           $tier.dataset.origBg = $tier.style.background;
           $tier.dataset.origColor = $tier.style.color;
         }
-        $tier.textContent = '✅ 已執行 · 持倉';
+        $tier.textContent = '🎯 執行中';
         $tier.style.background = 'rgba(63,185,80,0.20)';
         $tier.style.color = 'var(--green)';
       }
@@ -3522,13 +3922,17 @@ function applyExecutedVisuals() {
     const hasSmallExec = !!EXECUTED_SIGNALS.small;
     if (hasSmallExec) {
       if (!$smBtn.dataset.origText) $smBtn.dataset.origText = $smBtn.textContent;
-      $smBtn.textContent = '📍 持倉中 · 點我平倉';
+      $smBtn.innerHTML = '<span style="flex:1; text-align:center">🎯 小單執行中</span>' +
+                         '<span class="hold-x-btn" onclick="event.stopPropagation(); unmarkSmallTrade();" title="取消">×</span>';
+      $smBtn.style.display = 'flex';
+      $smBtn.style.alignItems = 'center';
       $smBtn.classList.add('executed-sync');
       $smBtn.disabled = false;
     } else {
       if ($smBtn.dataset.origText) {
         $smBtn.textContent = $smBtn.dataset.origText;
         delete $smBtn.dataset.origText;
+        $smBtn.style.display = '';
       }
       $smBtn.classList.remove('executed-sync');
       $smBtn.disabled = !SMALL.triggered;
@@ -4158,15 +4562,19 @@ function refreshExecPanel() {
       }
       const $exeBtn = $entryCard.querySelector('.card-execute-btn');
       if ($exeBtn) {
-        // v0.25.5 直覺三態按鈕：橘色「立即執行」/ 綠色「持倉中 · 點我平倉」
+        // v0.25.6 標記模式：未標記 / 執行中（含 × 取消）
         const isExec = EXECUTED_SIGNALS.high &&
                        EXECUTED_SIGNALS.high.sym === sym &&
                        EXECUTED_SIGNALS.high.model === d.model;
         if (isExec) {
-          $exeBtn.textContent = '📍 持倉中 · 點我平倉';
+          $exeBtn.innerHTML = '<span style="flex:1; text-align:center">🎯 執行中 · ' + sideTxt + ' ' + sym + '</span>' +
+                              '<span class="hold-x-btn" onclick="event.stopPropagation(); unmarkHighTrade();" title="取消執行">×</span>';
+          $exeBtn.style.display = 'flex';
+          $exeBtn.style.alignItems = 'center';
           $exeBtn.classList.add('executed');
         } else {
           $exeBtn.textContent = '⚡ 立即執行 · ' + sideTxt + ' ' + sym;
+          $exeBtn.style.display = '';
           $exeBtn.classList.remove('executed');
         }
         $exeBtn.setAttribute('onclick', "execHighTrade('execpanel')");
@@ -4234,6 +4642,26 @@ function refreshExecPanel() {
         $advAct.className = 'adv-action-text no';
       }
     }
+    
+    // ★ v0.25.7 軍師卡按鈕執行中狀態 ★
+    const $advExec = document.querySelector('.btn.adv-execute');
+    if ($advExec) {
+      const isAdvExec = EXECUTED_SIGNALS.advisor &&
+                        EXECUTED_SIGNALS.advisor.sym === sym &&
+                        EXECUTED_SIGNALS.advisor.model === adv.model;
+      if (isAdvExec) {
+        $advExec.innerHTML = '<span style="flex:1; text-align:center">🎯 執行中</span>' +
+                             '<span class="hold-x-btn rs-x" onclick="event.stopPropagation(); unmarkAdvisorTrade();" title="取消">×</span>';
+        $advExec.style.display = 'flex';
+        $advExec.style.alignItems = 'center';
+        $advExec.classList.add('executed');
+      } else {
+        $advExec.textContent = '⚡ 立即執行';
+        $advExec.style.display = '';
+        $advExec.classList.remove('executed');
+      }
+      $advExec.setAttribute('onclick', "execAdvisorTrade()");
+    }
   }
 
   // === 3. 小單卡 = 全標的 .small 最高分 ===
@@ -4260,15 +4688,19 @@ function refreshExecPanel() {
       }
       const $smBtn = $smentry.querySelector('.smentry-btn');
       if ($smBtn) {
-        // v0.25.5 直覺三態：持倉中 · 點我平倉
+        // v0.25.6 標記模式
         const isExec = EXECUTED_SIGNALS.small &&
                        EXECUTED_SIGNALS.small.sym === sym &&
                        EXECUTED_SIGNALS.small.model === ds.model;
         if (isExec) {
-          $smBtn.textContent = '📍 持倉中 · 點我平倉';
+          $smBtn.innerHTML = '<span style="flex:1; text-align:center">🎯 執行中 · 小單 ' + sym + ' ' + smSideTxt + '</span>' +
+                              '<span class="hold-x-btn" onclick="event.stopPropagation(); unmarkSmallTrade();" title="取消小單">×</span>';
+          $smBtn.style.display = 'flex';
+          $smBtn.style.alignItems = 'center';
           $smBtn.classList.add('executed-sync');
         } else {
           $smBtn.textContent = '⚡ 立即執行小單 · ' + sym + ' ' + smSideTxt;
+          $smBtn.style.display = '';
           $smBtn.classList.remove('executed-sync');
         }
         $smBtn.setAttribute('onclick', "execSmallTrade('execpanel')");
