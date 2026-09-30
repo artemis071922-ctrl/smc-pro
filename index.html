@@ -2638,7 +2638,7 @@ body {
           </div>
 
           <!-- 內嵌 K 線戰情圖 -->
-          <div class="wr-chart" id="wrChart">
+          <div class="wr-chart" id="wrChart"><button type="button" class="wr-chart-full" onclick="toggleChartFull(event)" title="放大／還原" aria-label="放大">⛶</button>
               <svg viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block">
               <rect x="0" y="0" width="1200" height="640" fill="#0E1116"/>
               <rect x="470" y="20" width="330" height="540" fill="rgba(88,166,255,0.05)"/>
@@ -7025,6 +7025,27 @@ try{ new MutationObserver(injectICTFlagshipGrid).observe(document.body,{childLis
 document.addEventListener('DOMContentLoaded',injectICTFlagshipGrid);
 injectICTFlagshipGrid();
 
+</script>
+
+<!-- 戰情室 K線滿版 · 2026-09-30 -->
+<style>
+.wr-chart{position:relative}
+.wr-chart-full{position:absolute;top:8px;right:8px;z-index:6;width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(20,26,40,.72);color:#e6edf3;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.wr-chart-full:hover{border-color:#58A6FF;color:#58A6FF}
+.wr-chart.is-full{position:fixed !important;inset:0 !important;z-index:99999 !important;margin:0 !important;padding:24px !important;min-height:0 !important;max-height:none !important;width:auto !important;background:#0E1116 !important;display:flex !important;align-items:center;justify-content:center}
+.wr-chart.is-full svg{width:100% !important;height:100% !important;max-height:100% !important}
+.wr-chart.is-full .wr-chart-full{top:16px;right:16px;width:40px;height:40px;font-size:18px}
+</style>
+<script>
+(function(){
+  function C(){return document.getElementById('wrChart');}
+  window.toggleChartFull=function(e){ if(e){e.stopPropagation();e.preventDefault();}
+    var c=C(); if(!c) return; var f=c.classList.toggle('is-full');
+    var b=c.querySelector('.wr-chart-full'); if(b) b.textContent=f?'\u2715':'\u26F6';
+    try{document.body.style.overflow=f?'hidden':'';}catch(_){}
+  };
+  document.addEventListener('keydown',function(ev){ if(ev.key==='Escape'){ var c=C(); if(c&&c.classList.contains('is-full')){ c.classList.remove('is-full'); var b=c.querySelector('.wr-chart-full'); if(b)b.textContent='\u26F6'; try{document.body.style.overflow='';}catch(_){} } } });
+})();
 </script>
 </body>
 </html>
