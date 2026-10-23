@@ -7123,6 +7123,26 @@ injectICTFlagshipGrid();
     var pos=(hi>lo)?(price-lo)/(hi-lo):null;
     return {bias:bias,hi:hi,lo:lo,eq:eq,price:price,pos:pos,evt:evt,lastH:lastH.p,lastL:lastL.p};
   }
+  // 階段③④：從偵測結構提議 進場(OTE)/SL/TP/R:R（提議≠下單，需對照 TV）
+  var lastProposal=null;
+  function proposeSetup(d){
+    if(!d || d.bias==='range' || !(d.hi>d.lo)) return null;
+    var hi=d.hi, lo=d.lo, r=hi-lo, buf=r*0.08;
+    var dir=d.bias==='bear'?'short':'long', entry,sl,tp;
+    if(dir==='short'){ entry=lo+0.705*r; sl=hi+buf; tp=lo; }
+    else { entry=lo+0.295*r; sl=lo-buf; tp=hi; }
+    var risk=Math.abs(entry-sl), reward=Math.abs(tp-entry), rr=risk>0?reward/risk:null;
+    return {dir:dir,entry:entry,sl:sl,tp:tp,rr:rr};
+  }
+  window.smcL1Apply=function(){
+    if(!lastProposal) return;
+    var dp=symDp(curSym()), f=Math.pow(10,dp);
+    var rnd=function(v){ return Math.round(v*f)/f; };
+    var e=document.getElementById('l1entry'), s=document.getElementById('l1sl'), t=document.getElementById('l1tp');
+    if(e) e.value=rnd(lastProposal.entry); if(s) s.value=rnd(lastProposal.sl); if(t) t.value=rnd(lastProposal.tp);
+    try{ renderCalc(); }catch(_){}
+    if(typeof window.showToast==='function') window.showToast('💡 已套用提議 · '+(lastProposal.dir==='short'?'做空':'做多')+' · R:R '+(lastProposal.rr?lastProposal.rr.toFixed(2):'—')+' · 對照 TV 再下','normal');
+  };
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7133,7 +7153,24 @@ injectICTFlagshipGrid();
     var evt=d.evt?('<b style="font-family:monospace;color:'+(d.evt.type.indexOf("CHoCH")>=0?'#d29922':'#79c0ff')+'">'+d.evt.type+' @ '+fmtPx(d.evt.p,dp)+'</b>'):'<b style="color:#6e7681">—</b>';
     var pos; if(d.pos==null)pos='—'; else if(d.pos<0||d.pos>1)pos='<b style="color:#d29922">突破區間</b>'; else { var pm=d.pos>=0.5; pos='<b style="font-family:monospace">'+(d.pos*100).toFixed(0)+'% <span style="color:'+(pm?'#f85149':'#3fb950')+'">'+(pm?'溢價':'折扣')+'</span></b>'; }
     function row(l,v){ return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#8b949e">'+l+'</span>'+v+'</div>'; }
-    body.innerHTML=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
+    var base=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
+    var prop=proposeSetup(d); lastProposal=prop;
+    var ph='';
+    if(!prop){ ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#8b949e">💡 提議：<b style="color:#8b949e">盤整中 · 等結構明朗（無明確 setup）</b></div>'; }
+    else {
+      var dirTxt=prop.dir==='short'?'<span style="color:#f85149">做空 ▼</span>':'<span style="color:#3fb950">做多 ▲</span>';
+      var rrCol=prop.rr==null?'#8b949e':(prop.rr>=2?'#3fb950':(prop.rr>=1.5?'#d29922':'#f85149'));
+      ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">'
+        +'<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">💡 提議 setup <span style="color:#6e7681;font-weight:600">· v1 近似，對照 TV 再下</span></div>'
+        +row('方向','<b>'+dirTxt+'</b>')
+        +row('進場 OTE 0.705','<b style="font-family:monospace;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</b>')
+        +row('止損 SL（擺動外）','<b style="font-family:monospace;color:#f85149">'+fmtPx(prop.sl,dp)+'</b>')
+        +row('止盈 TP（對向流動性）','<b style="font-family:monospace;color:#3fb950">'+fmtPx(prop.tp,dp)+'</b>')
+        +row('R:R','<b style="font-family:monospace;color:'+rrCol+'">'+(prop.rr?prop.rr.toFixed(2)+' : 1':'—')+'</b>')
+        +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
+        +'</div>';
+    }
+    body.innerHTML=base+ph;
   }
 
   function connect(){
