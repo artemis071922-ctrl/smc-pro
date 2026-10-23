@@ -7073,6 +7073,7 @@ injectICTFlagshipGrid();
     if(arr.length>400) arr=arr.slice(-400);
     window.CANDLES[k]=arr;
     if(k===curSym()){ paintCandleStatus(); try{ paintDetect(); }catch(_){} }
+    try{ renderRealChart(); }catch(_){}
   }
   // REST 歷史回補（開頁即有足夠 K 線可偵測；CORS/網路失敗則退回 WS 累積）
   function backfillCandles(k){
@@ -7242,6 +7243,7 @@ injectICTFlagshipGrid();
         g3.classList.add(good?(ideal?'ok':'warn'):'bad'); } }
     lastCalc={k:k,dp:dp,entry:entry,sl:sl,tp:tp,rhi:rhi,rlo:rlo,live:live,dir:dir,risk:risk,reward:reward,rr:rr};
     try{ syncWarRoom(); }catch(_){}
+    try{ renderRealChart(); }catch(_){}
     return lastCalc;
   }
 
@@ -7301,7 +7303,8 @@ injectICTFlagshipGrid();
     var liveWr=(window.LIVE_PX && typeof window.LIVE_PX[wrK]==='number')? window.LIVE_PX[wrK] : null;
     var drive=!!(c && c.entry!=null && c.sl!=null && c.tp!=null && c.k===wrK);
     var rrTxt=(drive && c.rr!=null)? (' · '+(Math.round(c.rr*10)/10)+'R') : '';
-    svg.querySelectorAll('text').forEach(function(t){
+    var hostReal=(function(){var h=document.getElementById('wrChart');return !!(h&&h.dataset&&h.dataset.real==='1');})();
+    if(!hostReal) svg.querySelectorAll('text').forEach(function(t){
       var txt=t.textContent.trim();
       if(txt.indexOf('模擬示意')>=0 || txt.indexOf('範例示意')>=0 || txt.indexOf('你的計畫')>=0){
         if(drive){ t.textContent='🎯 你的計畫 · OKX 現價實時'; t.setAttribute('fill','#3fb950'); }
@@ -7322,6 +7325,41 @@ injectICTFlagshipGrid();
       if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
       if(tp) tp.textContent=fmtPx(c.tp,symDp(wrK));
     }
+  }
+
+  // 戰情室真實 K 線圖（唯讀）：畫 OKX 實時 5M K 棒＋疊偵測結構＋你的進場/SL/TP＋現價
+  function renderRealChart(){
+    var host=document.getElementById('wrChart'); if(!host) return;
+    var k=wrSymbol(), cs=(window.CANDLES&&window.CANDLES[k])||[];
+    if(cs.length<10) return; // 真 K 線不足 → 暫留示意圖
+    var N=Math.min(cs.length,70), data=cs.slice(-N), dp=symDp(k);
+    var live=(window.LIVE_PX&&typeof window.LIVE_PX[k]==='number')?window.LIVE_PX[k]:data[data.length-1].c;
+    var c=lastCalc, plan=(c&&c.k===k&&c.entry!=null&&c.sl!=null&&c.tp!=null)?c:null;
+    var det=detectStructure(cs);
+    var pmin=Infinity,pmax=-Infinity;
+    data.forEach(function(d){ if(d.l<pmin)pmin=d.l; if(d.h>pmax)pmax=d.h; });
+    [live,plan&&plan.entry,plan&&plan.sl,plan&&plan.tp,det&&det.hi,det&&det.lo].forEach(function(v){ if(typeof v==='number'){ if(v<pmin)pmin=v; if(v>pmax)pmax=v; } });
+    var pad=(pmax-pmin)*0.06||1; pmin-=pad; pmax+=pad;
+    var W=1200,H=520,L=55,R=1030,T=22,B=470;
+    function X(i){ return L+(i+0.5)*(R-L)/N; }
+    function Y(p){ return T+(pmax-p)/(pmax-pmin)*(B-T); }
+    var bw=Math.max(2,(R-L)/N*0.62);
+    function lvl(p,color,label,dash){ if(typeof p!=='number')return''; var y=Y(p); return '<line x1="'+L+'" y1="'+y.toFixed(1)+'" x2="'+R+'" y2="'+y.toFixed(1)+'" stroke="'+color+'" stroke-width="1.3" stroke-dasharray="'+(dash||'6,4')+'"/><rect x="'+(R+4)+'" y="'+(y-11).toFixed(1)+'" width="162" height="22" rx="4" fill="rgba(13,18,32,.85)" stroke="'+color+'"/><text x="'+(R+12)+'" y="'+(y+5).toFixed(1)+'" fill="'+color+'" font-size="13" font-weight="700">'+label+' '+fmtPx(p,dp)+'</text>'; }
+    var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg" font-family="\'DejaVu Sans Mono\',monospace">';
+    s+='<rect width="'+W+'" height="'+H+'" fill="#0E1116"/>';
+    s+='<text x="20" y="34" fill="#e6edf3" font-size="16" font-weight="800">'+k+' 5M · OKX 實時</text>';
+    if(plan){ s+='<rect x="'+(W-258)+'" y="16" width="242" height="26" rx="5" fill="rgba(63,185,80,.14)" stroke="#3fb950"/><text x="'+(W-137)+'" y="34" fill="#3fb950" font-size="13" font-weight="800" text-anchor="middle">🎯 你的計畫 · 實時 K 線</text>'; }
+    else { s+='<rect x="'+(W-258)+'" y="16" width="242" height="26" rx="5" fill="rgba(210,153,34,.14)" stroke="#d29922"/><text x="'+(W-137)+'" y="34" fill="#d29922" font-size="13" font-weight="800" text-anchor="middle">📊 實時 K 線 · 偵測中</text>'; }
+    if(!plan && det){ s+='<rect x="'+L+'" y="'+Y(det.hi).toFixed(1)+'" width="'+(R-L)+'" height="'+Math.max(0,(Y(det.lo)-Y(det.hi))).toFixed(1)+'" fill="rgba(88,166,255,.04)"/>'; s+=lvl(det.hi,'#58A6FF','區間高','4,4')+lvl(det.lo,'#58A6FF','區間低','4,4')+lvl(det.eq,'#79c0ff','EQ','2,5'); }
+    if(plan){ s+=lvl(plan.sl,'#f85149','SL','6,3')+lvl(plan.entry,'#79c0ff','進場','6,3')+lvl(plan.tp,'#3fb950','TP','6,3'); }
+    for(var i=0;i<N;i++){ var d=data[i],up=d.c>=d.o,col=up?'#3fb950':'#f85149',x=X(i);
+      s+='<line x1="'+x.toFixed(1)+'" y1="'+Y(d.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+Y(d.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1.2"/>';
+      var yo=Y(d.o),yc=Y(d.c),top=Math.min(yo,yc),hgt=Math.max(1,Math.abs(yc-yo));
+      s+='<rect x="'+(x-bw/2).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hgt.toFixed(1)+'" fill="'+col+'" rx="1"/>'; }
+    var yl=Y(live); s+='<line x1="'+L+'" y1="'+yl.toFixed(1)+'" x2="'+R+'" y2="'+yl.toFixed(1)+'" stroke="#e6edf3" stroke-width="1" stroke-dasharray="2,3" opacity=".6"/><circle cx="'+X(N-1).toFixed(1)+'" cy="'+yl.toFixed(1)+'" r="4.5" fill="#fff" stroke="#0E1116" stroke-width="1.5"/><rect x="'+(R+4)+'" y="'+(yl-11).toFixed(1)+'" width="162" height="22" rx="4" fill="#e6edf3"/><text x="'+(R+12)+'" y="'+(yl+5).toFixed(1)+'" fill="#0E1116" font-size="13" font-weight="800">現在 '+fmtPx(live,dp)+'</text>';
+    s+='</svg>';
+    host.innerHTML='<button type="button" class="wr-chart-full" onclick="toggleChartFull(event)" title="放大／還原" aria-label="放大">⛶</button>'+s;
+    try{ host.dataset.real='1'; }catch(_){}
   }
 
   function buildCalc(){
@@ -7362,7 +7400,7 @@ injectICTFlagshipGrid();
       +'</div>';
     anchor.insertAdjacentHTML('afterend', html);
     ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
-    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} try{paintDetect();}catch(_){} try{ var k=this.value; if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){} });
+    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} try{paintDetect();}catch(_){} try{ var k=this.value; if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){} try{ renderRealChart(); }catch(_){} });
     var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
@@ -7371,7 +7409,7 @@ injectICTFlagshipGrid();
     try{ paintDetect(); }catch(_){}
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
