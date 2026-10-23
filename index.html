@@ -7144,6 +7144,39 @@ injectICTFlagshipGrid();
     try{ renderCalc(); }catch(_){}
     if(typeof window.showToast==='function') window.showToast('💡 已套用提議 · '+(lastProposal.dir==='short'?'做空':'做多')+' · R:R '+(lastProposal.rr?lastProposal.rr.toFixed(2):'—')+' · 對照 TV 再下','normal');
   };
+  // 第一庫 ICT：從真實 K 線＋結構＋KZ 認出旗艦卡型態（只放算得準的，其餘庫日後接）
+  function kzActive(){
+    try{ if(typeof window.getKZ==='function'){ var kz=window.getKZ(); return !!(kz && kz.end>0); } }catch(_){}
+    var el=document.getElementById('kzName'); return !!(el && el.textContent.indexOf('時段外')<0);
+  }
+  function pinBar(c){
+    var body=Math.abs(c.c-c.o), range=c.h-c.l; if(range<=0) return null;
+    var lw=Math.min(c.o,c.c)-c.l, uw=c.h-Math.max(c.o,c.c);
+    if(body<=range*0.35){ if(lw>=body*2 && lw>uw*1.5) return 'bull'; if(uw>=body*2 && uw>lw*1.5) return 'bear'; }
+    return null;
+  }
+  function detectICTModels(cs){
+    var out=[]; if(!cs||cs.length<12) return out;
+    var d=detectStructure(cs); if(!d) return out;
+    var pv=swingPivots(cs,2,2), N=cs.length, inKz=kzActive();
+    var recentSH=pv.H.length>1?pv.H[pv.H.length-2].p:(pv.H.length?pv.H[pv.H.length-1].p:null);
+    var recentSL=pv.L.length>1?pv.L[pv.L.length-2].p:(pv.L.length?pv.L[pv.L.length-1].p:null);
+    var sweep=null;
+    for(var i=Math.max(0,N-6);i<N;i++){
+      if(recentSH!=null && cs[i].h>recentSH && cs[i].c<recentSH) sweep={dir:'short',lvl:recentSH};
+      if(recentSL!=null && cs[i].l<recentSL && cs[i].c>recentSL) sweep={dir:'long',lvl:recentSL};
+    }
+    if(sweep) out.push({num:'⑤',name:'掃流動性 / 時段獵殺',dir:sweep.dir,note:'掃 '+(sweep.dir==='short'?'BSL':'SSL')+' @ '+Math.round(sweep.lvl)});
+    if(inKz && sweep && ((sweep.dir==='short'&&d.bias==='bear')||(sweep.dir==='long'&&d.bias==='bull'))) out.push({num:'⑪',name:'倫敦 Judas Swing',dir:sweep.dir,note:'KZ 內假突破→反轉'});
+    if(d.evt){ var up=d.evt.type.indexOf('↑')>=0; out.push({num:'④',name:d.evt.type.indexOf('CHoCH')>=0?'MSS 市場結構轉變':'BOS 結構延續',dir:up?'long':'short',note:d.evt.type+' @ '+Math.round(d.evt.p)}); }
+    for(var j=N-2;j>=Math.max(1,N-12);j--){ var a=cs[j-1],b=cs[j+1]; if(!a||!b) continue;
+      if(a.h<b.l){ out.push({num:'⑬',name:'FVG 失衡缺口',dir:'long',note:'多方 '+Math.round(a.h)+'–'+Math.round(b.l)}); break; }
+      if(a.l>b.h){ out.push({num:'⑬',name:'FVG 失衡缺口',dir:'short',note:'空方 '+Math.round(b.h)+'–'+Math.round(a.l)}); break; } }
+    var pb=pinBar(cs[N-1]); if(pb) out.push({num:'⑫',name:'Pin Bar',dir:pb==='bull'?'long':'short',note:pb==='bull'?'長下影反轉':'長上影反轉'});
+    if(d.pos!=null){ if(d.bias==='bear'&&d.pos>=0.62&&d.pos<=0.79) out.push({num:'OTE',name:'OTE 進場區',dir:'short',note:(d.pos*100).toFixed(0)+'% 溢價'});
+      if(d.bias==='bull'&&d.pos>=0.21&&d.pos<=0.38) out.push({num:'OTE',name:'OTE 進場區',dir:'long',note:(d.pos*100).toFixed(0)+'% 折扣'}); }
+    return out;
+  }
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7171,7 +7204,14 @@ injectICTFlagshipGrid();
         +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
         +'</div>';
     }
-    body.innerHTML=base+ph;
+    var models=detectICTModels(cs), mh='';
+    if(models.length){
+      mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240"><div style="font-weight:800;color:#e6edf3;margin-bottom:5px">🃏 偵測到的旗艦卡 <span style="color:#6e7681;font-weight:600">· ICT 庫 v1</span></div>';
+      models.forEach(function(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
+        mh+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:22px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'做空▼':(m.dir==='long'?'做多▲':''))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; });
+      mh+='</div>';
+    } else { mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#6e7681">🃏 旗艦卡：暫無明確型態（ICT 庫 v1）</div>'; }
+    body.innerHTML=base+mh+ph;
   }
 
   function connect(){
