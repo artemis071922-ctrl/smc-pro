@@ -7123,7 +7123,9 @@ injectICTFlagshipGrid();
         var good = dir==='short'? pos>=0.5 : pos<=0.5;
         var ideal = dir==='short'? pos>=0.62 : pos<=0.38;
         g3.classList.add(good?(ideal?'ok':'warn'):'bad'); } }
-    return {k:k,dp:dp,entry:entry,sl:sl,tp:tp,rhi:rhi,rlo:rlo,live:live,dir:dir,risk:risk,reward:reward,rr:rr};
+    lastCalc={k:k,dp:dp,entry:entry,sl:sl,tp:tp,rhi:rhi,rlo:rlo,live:live,dir:dir,risk:risk,reward:reward,rr:rr};
+    try{ syncWarRoom(); }catch(_){}
+    return lastCalc;
   }
 
   var L1_LS='smcpro_signal_log_v38';
@@ -7170,6 +7172,40 @@ injectICTFlagshipGrid();
     toast('匯出 '+log.length+' 筆','normal');
   }
 
+  var lastCalc=null;
+  function wrSymbol(){
+    try{ if(window.RANK_DB && window.CURRENT_RANK!=null && window.RANK_DB[window.CURRENT_RANK]) return window.RANK_DB[window.CURRENT_RANK].sym; }catch(_){}
+    return 'BTC';
+  }
+  // L1 真實鏡像 → 戰情室：現在=OKX真價；填了 L1 且標的相符才顯示你的真值，否則明標範例
+  function syncWarRoom(){
+    var svg=document.querySelector('.wr-chart svg, .warroom svg'); if(!svg) return;
+    var c=lastCalc, wrK=wrSymbol();
+    var liveWr=(window.LIVE_PX && typeof window.LIVE_PX[wrK]==='number')? window.LIVE_PX[wrK] : null;
+    var drive=!!(c && c.entry!=null && c.sl!=null && c.tp!=null && c.k===wrK);
+    var rrTxt=(drive && c.rr!=null)? (' · '+(Math.round(c.rr*10)/10)+'R') : '';
+    svg.querySelectorAll('text').forEach(function(t){
+      var txt=t.textContent.trim();
+      if(txt.indexOf('模擬示意')>=0 || txt.indexOf('範例示意')>=0 || txt.indexOf('你的計畫')>=0){
+        if(drive){ t.textContent='🎯 你的計畫 · OKX 現價實時'; t.setAttribute('fill','#3fb950'); }
+        else { t.textContent='📘 範例示意 · 非真實價位（填 L1 計算器即接真）'; t.setAttribute('fill','#d29922'); }
+      }
+      else if(txt.indexOf('現在')===0){ if(liveWr!=null) t.textContent='現在 '+fmtPx(liveWr,symDp(wrK)); }
+      else if(txt.indexOf('進場')===0){ t.textContent=drive? ('進場 '+fmtPx(c.entry,symDp(wrK))) : '進場 （範例）'; }
+      else if(txt.indexOf('主 SL')===0){ t.textContent=drive? ('主 SL '+fmtPx(c.sl,symDp(wrK))) : '主 SL （範例）'; }
+      else if(txt.indexOf('TP1')===0){ t.textContent=drive? ('TP1 '+fmtPx(c.tp,symDp(wrK))+rrTxt) : txt; }
+    });
+    var card=document.getElementById('highEntryCard');
+    if(card && drive){
+      var e=card.querySelector('[data-target-line="entry"] .v');
+      var s=card.querySelector('[data-target-line="sl_main"] .v');
+      var tp=card.querySelector('.tp-table .v[data-target-line="tp1"]');
+      if(e) e.textContent=fmtPx(c.entry,symDp(wrK));
+      if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
+      if(tp) tp.textContent=fmtPx(c.tp,symDp(wrK));
+    }
+  }
+
   function buildCalc(){
     if(document.querySelector('#smcL1panel')) return;
     var anchor=document.getElementById('wrChart'); if(!anchor) return;
@@ -7213,7 +7249,7 @@ injectICTFlagshipGrid();
     renderCalc();
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} }, 1000); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
