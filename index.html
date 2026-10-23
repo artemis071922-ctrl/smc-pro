@@ -3048,13 +3048,17 @@ function tick() {
   const remainSec = kz.end > 0 ? (kz.end - (now.getHours()*60+now.getMinutes()))*60 - now.getSeconds() : 0;
   document.getElementById('kzCountdown').textContent = kz.end > 0 ? ' · 結束 ' + fmtHMS(remainSec) : '';
 
-  // BTC 微波動
-  const basePrice = 104932;
-  const wave = Math.sin(now.getTime()/3000) * 18 + (Math.random()-0.5)*4;
-  const p = (basePrice + wave).toFixed(0);
-  const pStr = Number(p).toLocaleString();
+  // BTC 價格：L1 真實 OKX 價優先；WS 未連線時回退模擬波（狀態燈會明確標示「模擬」）
+  let pStr;
+  if (window.LIVE_PX && typeof window.LIVE_PX.BTC === 'number') {
+    pStr = window.LIVE_PX.BTC.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  } else {
+    const basePrice = 104932;
+    const wave = Math.sin(now.getTime()/3000) * 18 + (Math.random()-0.5)*4;
+    pStr = Number((basePrice + wave).toFixed(0)).toLocaleString();
+  }
   document.getElementById('priceBTC').textContent = pStr;
-  document.getElementById('rulerPrice').textContent = pStr;
+  const _rp = document.getElementById('rulerPrice'); if (_rp) _rp.textContent = pStr;
   // ★ v0.21 移除 smEntry 主時鐘覆寫（讓 promoteRank 控制小單卡進場價）★
 
   // 主訊號鐘與軍師鐘同步
@@ -6952,5 +6956,268 @@ injectICTFlagshipGrid();
   document.addEventListener('keydown',function(ev){ if(ev.key==='Escape'){ var c=C(); if(c&&c.classList.contains('is-full')){ c.classList.remove('is-full'); var b=c.querySelector('.wr-chart-full'); if(b)b.textContent='\u26F6'; try{document.body.style.overflow='';}catch(_){} } } });
 })();
 </script>
+<!-- ════════════ L1 · OKX 實時價 + 手動計算器 + Phase D 快照 (2026-10-23) ════════════ -->
+<style>
+/* 戰情室圖表：依容器寬度自適應（去左右黑邊，比例不變形） */
+.warroom > .wr-chart { flex:0 0 auto !important; height:auto !important; min-height:0 !important; max-height:none !important; justify-content:flex-start !important; overflow-x:hidden !important; }
+.warroom > .wr-chart svg, .wr-chart svg { width:100% !important; height:auto !important; max-height:none !important; min-width:0 !important; }
+
+/* OKX 狀態燈 */
+.okx-status .dot { transition:background .3s, box-shadow .3s; }
+.okx-status.live .dot { background:#3fb950 !important; box-shadow:0 0 6px #3fb950; }
+.okx-status.live { color:#3fb950 !important; }
+.okx-status.connecting .dot { background:#d29922 !important; box-shadow:0 0 6px #d29922; animation:l1blink 1s infinite; }
+.okx-status.connecting { color:#d29922 !important; }
+.okx-status.down .dot { background:#f85149 !important; box-shadow:0 0 6px #f85149; }
+.okx-status.down { color:#f85149 !important; }
+@keyframes l1blink { 50%{opacity:.3} }
+.px-up { color:#3fb950 !important; transition:color .1s; } .px-dn { color:#f85149 !important; transition:color .1s; }
+
+/* L1 計算器 */
+#smcL1panel { margin:10px 14px 14px; background:var(--bg-2,#11161f); border:1px solid var(--border,#232a36); border-radius:10px; padding:12px 14px; font-family:var(--font-tc,'Noto Sans CJK TC',sans-serif); }
+#smcL1panel .l1-head { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:#e6edf3; margin-bottom:10px; flex-wrap:wrap; }
+#smcL1panel .l1-head .l1-live { margin-left:auto; font-family:var(--font-mono,monospace); font-size:12px; color:#8b949e; font-weight:700; }
+#smcL1panel .l1-head .l1-live b { color:#3fb950; }
+#smcL1panel .l1-inputs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:8px; }
+#smcL1panel .l1-range { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; }
+#smcL1panel .l1-field { display:flex; flex-direction:column; gap:3px; }
+#smcL1panel .l1-field label { font-size:10px; color:#8b949e; font-weight:700; letter-spacing:.3px; }
+#smcL1panel .l1-field input { background:#0d1220; border:1px solid #2b3240; border-radius:6px; color:#e6edf3; font-family:var(--font-mono,monospace); font-size:15px; font-weight:700; padding:7px 9px; width:100%; box-sizing:border-box; }
+#smcL1panel .l1-field input:focus { outline:none; border-color:#58A6FF; }
+#smcL1panel .l1-range .l1-field input { font-size:13px; padding:5px 8px; }
+#smcL1panel .l1-readout { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+#smcL1panel .l1-stat { background:#0d1220; border:1px solid #1c2430; border-radius:7px; padding:7px 9px; }
+#smcL1panel .l1-stat .k { font-size:10px; color:#8b949e; font-weight:700; }
+#smcL1panel .l1-stat .v { font-family:var(--font-mono,monospace); font-size:15px; font-weight:800; color:#e6edf3; margin-top:2px; }
+#smcL1panel .l1-stat .s { font-size:10px; color:#6e7681; font-family:var(--font-mono,monospace); min-height:12px; }
+#smcL1panel .l1-gates { display:flex; gap:8px; margin-bottom:10px; }
+#smcL1panel .l1-gate { flex:1; display:flex; align-items:center; gap:7px; background:#0d1220; border:1px solid #1c2430; border-radius:7px; padding:8px 10px; }
+#smcL1panel .l1-gate .lamp { width:12px; height:12px; border-radius:50%; background:#30363d; flex:none; transition:background .25s, box-shadow .25s; }
+#smcL1panel .l1-gate.ok .lamp { background:#3fb950; box-shadow:0 0 7px #3fb950; }
+#smcL1panel .l1-gate.warn .lamp { background:#d29922; box-shadow:0 0 7px #d29922; }
+#smcL1panel .l1-gate.bad .lamp { background:#f85149; box-shadow:0 0 7px #f85149; }
+#smcL1panel .l1-gate .gt { font-size:11px; font-weight:700; color:#c9d1d9; }
+#smcL1panel .l1-gate .gv { margin-left:auto; font-size:11px; font-family:var(--font-mono,monospace); color:#8b949e; font-weight:700; }
+#smcL1panel .l1-actions { display:flex; gap:8px; }
+#smcL1panel .l1-btn { border-radius:8px; padding:10px; font-size:13px; font-weight:800; cursor:pointer; font-family:var(--font-tc,'Noto Sans CJK TC',sans-serif); }
+#smcL1panel .l1-btn.go { flex:1; border:none; background:linear-gradient(90deg,#1f6feb,#388bfd); color:#fff; }
+#smcL1panel .l1-btn.go:hover { filter:brightness(1.1); }
+#smcL1panel .l1-btn.exp { flex:0 0 auto; background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 14px; }
+#smcL1panel .l1-note { font-size:10px; color:#6e7681; margin-top:8px; line-height:1.5; }
+#l1sym { background:#0d1220; border:1px solid #2b3240; color:#e6edf3; border-radius:6px; font-size:11px; font-weight:700; padding:3px 6px; margin-left:6px; }
+</style>
+<script>
+(function(){
+  'use strict';
+  var SYMS=[
+    {k:'BTC',inst:'BTC-USDT-SWAP',dp:0},
+    {k:'ETH',inst:'ETH-USDT-SWAP',dp:0},
+    {k:'SOL',inst:'SOL-USDT-SWAP',dp:2},
+    {k:'XRP',inst:'XRP-USDT-SWAP',dp:4},
+    {k:'TRX',inst:'TRX-USDT-SWAP',dp:4}
+  ];
+  window.LIVE_PX=window.LIVE_PX||{};
+  var ws=null,pingTimer=null,retry=0,lastPx={},manualClosed=false;
+
+  function fmtPx(v,dp){ return Number(v).toLocaleString(undefined,{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+  function toast(m,t){ if(typeof window.showToast==='function'){ window.showToast(m,t||'normal'); } else { console.log('[L1]',m); } }
+
+  function setStatus(cls,text){
+    var el=document.querySelector('.okx-status'); if(!el) return;
+    el.classList.remove('live','connecting','down'); el.classList.add(cls);
+    var span=el.querySelector('span:last-child'); if(span) span.textContent=text;
+  }
+
+  function tagCardPrices(){
+    var names=document.querySelectorAll('.sym-name');
+    Array.prototype.forEach.call(names,function(n){
+      var key=(n.textContent||'').trim(); var row=n.parentElement; if(!row) return;
+      var px=row.querySelector('.sym-price'); if(!px) return;
+      if(['BTC','ETH','SOL','XRP','TRX'].indexOf(key)>=0 && !px.id) px.id='l1px_'+key;
+    });
+  }
+
+  function paintPrice(k){
+    var sym=null; for(var i=0;i<SYMS.length;i++){ if(SYMS[i].k===k){sym=SYMS[i];break;} } if(!sym) return;
+    var v=window.LIVE_PX[k]; if(typeof v!=='number') return;
+    var str=fmtPx(v,sym.dp);
+    var cell=document.querySelector('#l1px_'+k);
+    if(cell){
+      cell.textContent=str;
+      var prev=lastPx[k];
+      if(typeof prev==='number' && v!==prev){
+        cell.classList.remove('px-up','px-dn'); void cell.offsetWidth;
+        cell.classList.add(v>prev?'px-up':'px-dn');
+        setTimeout(function(){ cell.classList.remove('px-up','px-dn'); },650);
+      }
+    }
+    lastPx[k]=v;
+    if(k==='BTC'){
+      var pb=document.getElementById('priceBTC'); if(pb) pb.textContent=str;
+      var rp=document.getElementById('rulerPrice'); if(rp) rp.textContent=str;
+    }
+    if(k===curSym()) renderCalc();
+  }
+
+  function connect(){
+    if(manualClosed) return;
+    setStatus('connecting','OKX 連線中…');
+    try { ws=new WebSocket('wss://ws.okx.com:8443/ws/v5/public'); }
+    catch(e){ scheduleRetry(); return; }
+    ws.onopen=function(){
+      retry=0;
+      ws.send(JSON.stringify({op:'subscribe',args:SYMS.map(function(s){return {channel:'tickers',instId:s.inst};})}));
+      clearInterval(pingTimer);
+      pingTimer=setInterval(function(){ try{ if(ws&&ws.readyState===1) ws.send('ping'); }catch(_){} },20000);
+    };
+    ws.onmessage=function(ev){
+      if(ev.data==='pong') return;
+      var msg; try{ msg=JSON.parse(ev.data); }catch(_){ return; }
+      if(msg.event){ if(msg.event==='subscribe') setStatus('live','OKX 實時'); else if(msg.event==='error'){ setStatus('down','OKX 訂閱失敗'); } return; }
+      if(msg.arg && msg.data && msg.data.length){
+        var inst=msg.arg.instId, sym=null;
+        for(var i=0;i<SYMS.length;i++){ if(SYMS[i].inst===inst){sym=SYMS[i];break;} } if(!sym) return;
+        var last=parseFloat(msg.data[0].last);
+        if(!isNaN(last)){ window.LIVE_PX[sym.k]=last; paintPrice(sym.k); setStatus('live','OKX 實時'); }
+      }
+    };
+    ws.onclose=function(){ clearInterval(pingTimer); if(!manualClosed){ setStatus('down','OKX 重連中…'); scheduleRetry(); } };
+    ws.onerror=function(){ try{ ws.close(); }catch(_){} };
+  }
+  function scheduleRetry(){ retry++; setTimeout(connect, Math.min(1000*Math.pow(1.6,retry),15000)); }
+
+  function curSym(){ var s=document.getElementById('l1sym'); return s? s.value : 'BTC'; }
+  function symDp(k){ for(var i=0;i<SYMS.length;i++){ if(SYMS[i].k===k) return SYMS[i].dp; } return 2; }
+  function num(id){ var el=document.getElementById(id); if(!el) return null; var v=parseFloat((el.value||'').replace(/,/g,'')); return isNaN(v)?null:v; }
+
+  function renderCalc(){
+    var k=curSym(), dp=symDp(k);
+    var entry=num('l1entry'), sl=num('l1sl'), tp=num('l1tp'), rhi=num('l1rhi'), rlo=num('l1rlo');
+    var live=(typeof window.LIVE_PX[k]==='number')? window.LIVE_PX[k] : null;
+    var lv=document.getElementById('l1livepx');
+    if(lv) lv.innerHTML = live!=null ? (k+' <b>'+fmtPx(live,dp)+'</b>') : (k+' <span style="color:#f85149">待連線</span>');
+
+    var dir=null; if(entry!=null && sl!=null){ dir = sl>entry ? 'short' : (sl<entry ? 'long' : null); }
+    var risk=(entry!=null&&sl!=null)? Math.abs(entry-sl):null;
+    var reward=(entry!=null&&tp!=null)? Math.abs(tp-entry):null;
+    var rr=(risk&&reward&&risk>0)? reward/risk : null;
+    var riskPct=(risk!=null&&entry)? risk/entry*100 : null;
+    var rewardPct=(reward!=null&&entry)? reward/entry*100 : null;
+    var distLive=(live!=null&&entry!=null)? (entry-live) : null;
+    var distPct=(distLive!=null&&live)? distLive/live*100 : null;
+
+    function setStat(id,val,sub){ var e=document.getElementById(id); if(e){ e.querySelector('.v').textContent=val; var s=e.querySelector('.s'); if(s) s.textContent=sub||''; } }
+    setStat('l1risk', risk!=null? fmtPx(risk,dp):'—', riskPct!=null? riskPct.toFixed(2)+'%':'');
+    setStat('l1reward', reward!=null? fmtPx(reward,dp):'—', rewardPct!=null? rewardPct.toFixed(2)+'%':'');
+    setStat('l1rr', rr!=null? rr.toFixed(2):'—', dir? (dir==='short'?'做空':'做多'):'');
+    setStat('l1dist', distLive!=null? ((distLive>0?'+':'')+fmtPx(distLive,dp)):'—', distPct!=null? ((distPct>0?'+':'')+distPct.toFixed(2)+'%'):'');
+
+    var g7=document.getElementById('l1g7');
+    if(g7){ g7.classList.remove('ok','warn','bad'); var gv7=g7.querySelector('.gv');
+      if(rr==null){ gv7.textContent='待輸入'; } else { gv7.textContent=rr.toFixed(2)+':1'; g7.classList.add(rr>=2?'ok':(rr>=1.5?'warn':'bad')); } }
+    var g3=document.getElementById('l1g3');
+    if(g3){ g3.classList.remove('ok','warn','bad'); var gv3=g3.querySelector('.gv');
+      if(entry==null||rhi==null||rlo==null||rhi<=rlo||dir==null){ gv3.textContent = dir==null?'待輸入':'填區間'; }
+      else { var pos=(entry-rlo)/(rhi-rlo); var premium=pos>=0.5;
+        gv3.textContent=(pos*100).toFixed(0)+'% '+(premium?'溢價':'折扣');
+        var good = dir==='short'? pos>=0.5 : pos<=0.5;
+        var ideal = dir==='short'? pos>=0.62 : pos<=0.38;
+        g3.classList.add(good?(ideal?'ok':'warn'):'bad'); } }
+    return {k:k,dp:dp,entry:entry,sl:sl,tp:tp,rhi:rhi,rlo:rlo,live:live,dir:dir,risk:risk,reward:reward,rr:rr};
+  }
+
+  var L1_LS='smcpro_signal_log_v38';
+  function readLog(){ try{ return JSON.parse(localStorage.getItem(L1_LS)||'[]'); }catch(_){ return []; } }
+  function writeLog(a){ try{ localStorage.setItem(L1_LS, JSON.stringify(a.slice(-500))); }catch(_){} }
+  function grabLeds(){ return Array.prototype.map.call(document.querySelectorAll('.cs-led'),function(el){return el.classList.contains('ok');}); }
+  function kzName(){ var e=document.querySelector('#kzName'); return e? e.textContent.trim().slice(0,20):null; }
+
+  function snapshot(){
+    var c=renderCalc();
+    if(c.entry==null||c.sl==null||c.tp==null){ toast('請先填 進場 / 止損 / 止盈','warn'); return; }
+    var leds=grabLeds(); var kzNow=kzName(); var insideKz=!!(kzNow && kzNow.indexOf('時段外')<0);
+    var go=true;
+    if(c.rr==null||c.rr<2){ go=confirm('⚠ R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' < 2:1，未達鐵律門檻。仍要建檔嗎？'); }
+    if(!go) return;
+    var now=new Date();
+    var rec={
+      log_id:'man_'+now.getTime()+'_'+Math.floor(Math.random()*9999),
+      timestamp:now.toISOString(), version:'L1', kind:'manual',
+      symbol:c.k, side:c.dir, model:null,
+      score:null, score_tier:null, score_source:'manual',
+      c1_kz:insideKz, c2_htf:leds[1]!=null?leds[1]:null, c3_zone:leds[2]!=null?leds[2]:null,
+      c4_score_pass:null, c5_ob:leds[4]!=null?leds[4]:null, c6_sl_ob:leds[5]!=null?leds[5]:null,
+      c7_rr:c.rr!=null?(c.rr>=2):null, seven_pass_count:leds.filter(Boolean).length,
+      ob_fvg_stack:null, mss:null, sweep:null, kz_session:kzNow, volatility_state:null,
+      harmonic_match:null, harmonic_type:null, harmonic_prz_touch:null,
+      kline_pattern:null, kline_direction:null, kline_confirmation:null,
+      entry_price:c.entry, sl_price:c.sl, tp1_price:c.tp, rr_ratio:c.rr!=null?Math.round(c.rr*100)/100:null,
+      pine_triggered:false, manual_verified:true,
+      outcome:null, fail_category:null, exit_reason:null,
+      live_px_at_snapshot:c.live
+    };
+    var log=readLog(); log.push(rec); writeLog(log);
+    toast('📸 已建檔 · '+c.k+' '+(c.dir==='short'?'做空':(c.dir==='long'?'做多':''))+' · R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' · 共 '+log.length+' 筆','normal');
+    var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=log.length+' 筆';
+  }
+  function exportCsv(){
+    if(window.SignalLog38 && window.SignalLog38.exportCSV){ toast('匯出：'+window.SignalLog38.exportCSV(),'normal'); return; }
+    var log=readLog(); if(!log.length){ toast('尚無記錄','warn'); return; }
+    var cols=Object.keys(log[0]);
+    var csv=[cols.join(',')].concat(log.map(function(row){return cols.map(function(c){return JSON.stringify(row[c]==null?'':row[c]);}).join(',');})).join('\n');
+    var blob=new Blob([csv],{type:'text/csv;charset=utf-8'}), url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download='smcpro_signal_log_'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast('匯出 '+log.length+' 筆','normal');
+  }
+
+  function buildCalc(){
+    if(document.querySelector('#smcL1panel')) return;
+    var anchor=document.getElementById('wrChart'); if(!anchor) return;
+    var html=''
+      +'<div id="smcL1panel">'
+      +'<div class="l1-head">⚡ L1 即時計算器 · 手動驗算'
+        +'<select id="l1sym"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>TRX</option></select>'
+        +'<span class="l1-live" id="l1livepx">BTC <b>待連線</b></span></div>'
+      +'<div class="l1-inputs">'
+        +'<div class="l1-field"><label>進場 ENTRY</label><input id="l1entry" type="text" inputmode="decimal" placeholder="OTE 0.62"></div>'
+        +'<div class="l1-field"><label>止損 SL (OB)</label><input id="l1sl" type="text" inputmode="decimal" placeholder="OB 上/下緣"></div>'
+        +'<div class="l1-field"><label>止盈 TP1</label><input id="l1tp" type="text" inputmode="decimal" placeholder="目標"></div>'
+      +'</div>'
+      +'<div class="l1-range">'
+        +'<div class="l1-field"><label>區間高 (選填)</label><input id="l1rhi" type="text" inputmode="decimal" placeholder="range high"></div>'
+        +'<div class="l1-field"><label>區間低 (選填)</label><input id="l1rlo" type="text" inputmode="decimal" placeholder="range low"></div>'
+        +'<div class="l1-field"><label>　</label><div style="font-size:10px;color:#6e7681;line-height:1.3;padding-top:5px">填區間→亮③位置燈<br>方向由 進場vs止損 自動判定</div></div>'
+      +'</div>'
+      +'<div class="l1-readout">'
+        +'<div class="l1-stat" id="l1risk"><div class="k">風險 1R</div><div class="v">—</div><div class="s"></div></div>'
+        +'<div class="l1-stat" id="l1reward"><div class="k">報酬</div><div class="v">—</div><div class="s"></div></div>'
+        +'<div class="l1-stat" id="l1rr"><div class="k">R:R</div><div class="v">—</div><div class="s"></div></div>'
+        +'<div class="l1-stat" id="l1dist"><div class="k">距現價</div><div class="v">—</div><div class="s"></div></div>'
+      +'</div>'
+      +'<div class="l1-gates">'
+        +'<div class="l1-gate" id="l1g3"><span class="lamp"></span><span class="gt">③ 位置 折扣/溢價</span><span class="gv">待輸入</span></div>'
+        +'<div class="l1-gate" id="l1g7"><span class="lamp"></span><span class="gt">⑦ R:R ≥ 2:1</span><span class="gv">待輸入</span></div>'
+      +'</div>'
+      +'<div class="l1-actions">'
+        +'<button class="l1-btn go" id="l1go">⚡ 開倉並建檔 (Phase D)</button>'
+        +'<button class="l1-btn exp" id="l1exp">📥 CSV <span id="l1count" style="opacity:.7">— 筆</span></button>'
+      +'</div>'
+      +'<div class="l1-note">※ 計算器只做決策數學與建檔；下單仍在 TV 一鍵送 OKX。建檔＝當下七條件 LED＋現價快照，當下採集不回填，標 manual_verified。</div>'
+      +'</div>';
+    anchor.insertAdjacentHTML('afterend', html);
+    ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
+    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', renderCalc);
+    var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
+    var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
+    var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
+    renderCalc();
+  }
+
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
+})();
+</script>
+
 </body>
 </html>
