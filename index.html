@@ -7072,7 +7072,17 @@ injectICTFlagshipGrid();
     arr=keys.map(function(t){return byT[t];});
     if(arr.length>400) arr=arr.slice(-400);
     window.CANDLES[k]=arr;
-    if(k===curSym()) paintCandleStatus();
+    if(k===curSym()){ paintCandleStatus(); try{ paintDetect(); }catch(_){} }
+  }
+  // REST 歷史回補（開頁即有足夠 K 線可偵測；CORS/網路失敗則退回 WS 累積）
+  function backfillCandles(k){
+    var sym=null; for(var i=0;i<SYMS.length;i++){ if(SYMS[i].k===k){sym=SYMS[i];break;} } if(!sym) return;
+    try{
+      fetch('https://www.okx.com/api/v5/market/candles?instId='+sym.inst+'&bar=5m&limit=100')
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if(j && j.code==='0' && j.data && j.data.length){ ingestCandles(k, j.data.slice().reverse()); } })
+        .catch(function(){});
+    }catch(_){}
   }
   function paintCandleStatus(){
     var el=document.getElementById('l1candle'); if(!el) return;
@@ -7080,6 +7090,50 @@ injectICTFlagshipGrid();
     if(!arr.length){ el.innerHTML='📊 即時 5M K線：<span style="color:#d29922">連線中…</span>'; return; }
     var last=arr[arr.length-1];
     el.innerHTML='📊 即時 5M K線 · '+k+' · <b style="color:#e6edf3">'+arr.length+'</b> 根 · 最新收 <b style="color:#e6edf3">'+fmtPx(last.c,symDp(k))+'</b> <span style="color:#3fb950">● 流動中</span> <span style="color:#6e7681">（階段① 地基·待接偵測）</span>';
+  }
+
+  // 階段② SMC 結構偵測 v1（擺動高低 → BOS/CHoCH → 區間/折扣溢價）· 近似，需對照 TV 校準
+  function swingPivots(cs,L,R){
+    var H=[],Lw=[];
+    for(var i=L;i<cs.length-R;i++){
+      var hi=true,lo=true;
+      for(var j=i-L;j<=i+R;j++){ if(j===i)continue; if(cs[j].h>=cs[i].h)hi=false; if(cs[j].l<=cs[i].l)lo=false; }
+      if(hi)H.push({i:i,p:cs[i].h,t:cs[i].t});
+      if(lo)Lw.push({i:i,p:cs[i].l,t:cs[i].t});
+    }
+    return {H:H,L:Lw};
+  }
+  function detectStructure(cs){
+    if(!cs||cs.length<12) return null;
+    var pv=swingPivots(cs,2,2);
+    if(!pv.H.length||!pv.L.length) return null;
+    var lastH=pv.H[pv.H.length-1], lastL=pv.L[pv.L.length-1];
+    var prevH=pv.H.length>1?pv.H[pv.H.length-2]:null, prevL=pv.L.length>1?pv.L[pv.L.length-2]:null;
+    var bias='range';
+    if(prevH&&prevL){
+      var hh=lastH.p>prevH.p, hl=lastL.p>prevL.p, lh=lastH.p<prevH.p, ll=lastL.p<prevL.p;
+      if(hh&&hl)bias='bull'; else if(lh&&ll)bias='bear';
+    }
+    var evt=null;
+    for(var i=Math.max(lastH.i,lastL.i)+1;i<cs.length;i++){
+      if(cs[i].c>lastH.p){ evt={type:(bias==='bear'?'CHoCH↑':'BOS↑'),p:lastH.p,i:i}; break; }
+      if(cs[i].c<lastL.p){ evt={type:(bias==='bull'?'CHoCH↓':'BOS↓'),p:lastL.p,i:i}; break; }
+    }
+    var hi=lastH.p, lo=lastL.p, eq=(hi+lo)/2, price=cs[cs.length-1].c;
+    var pos=(hi>lo)?(price-lo)/(hi-lo):null;
+    return {bias:bias,hi:hi,lo:lo,eq:eq,price:price,pos:pos,evt:evt,lastH:lastH.p,lastL:lastL.p};
+  }
+  function paintDetect(){
+    var body=document.querySelector('#l1detect .d-body'); if(!body) return;
+    var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
+    var d=detectStructure(cs);
+    if(!d){ body.innerHTML='<span style="color:#6e7681">等 K 線累積（≥12 根）…</span>'; return; }
+    var dp=symDp(k);
+    var bias=d.bias==='bull'?'<b style="color:#3fb950">看漲 ▲</b>':(d.bias==='bear'?'<b style="color:#f85149">看跌 ▼</b>':'<b style="color:#8b949e">盤整 ◆</b>');
+    var evt=d.evt?('<b style="font-family:monospace;color:'+(d.evt.type.indexOf("CHoCH")>=0?'#d29922':'#79c0ff')+'">'+d.evt.type+' @ '+fmtPx(d.evt.p,dp)+'</b>'):'<b style="color:#6e7681">—</b>';
+    var pos; if(d.pos==null)pos='—'; else if(d.pos<0||d.pos>1)pos='<b style="color:#d29922">突破區間</b>'; else { var pm=d.pos>=0.5; pos='<b style="font-family:monospace">'+(d.pos*100).toFixed(0)+'% <span style="color:'+(pm?'#f85149':'#3fb950')+'">'+(pm?'溢價':'折扣')+'</span></b>'; }
+    function row(l,v){ return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#8b949e">'+l+'</span>'+v+'</div>'; }
+    body.innerHTML=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
   }
 
   function connect(){
@@ -7241,7 +7295,8 @@ injectICTFlagshipGrid();
       +'<div class="l1-head">⚡ L1 即時計算器 · 手動驗算'
         +'<select id="l1sym"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>TRX</option></select>'
         +'<span class="l1-live" id="l1livepx">BTC <b>待連線</b></span></div>'
-      +'<div id="l1candle" style="font-size:11px;color:#8b949e;font-weight:700;margin:-2px 0 10px;padding:6px 9px;background:#0d1220;border:1px solid #1c2430;border-radius:6px">📊 即時 5M K線：<span style="color:#d29922">連線中…</span></div>'
+      +'<div id="l1candle" style="font-size:11px;color:#8b949e;font-weight:700;margin:-2px 0 8px;padding:6px 9px;background:#0d1220;border:1px solid #1c2430;border-radius:6px">📊 即時 5M K線：<span style="color:#d29922">連線中…</span></div>'
+      +'<div id="l1detect" style="margin:0 0 10px;padding:8px 10px;background:#0d1220;border:1px solid #1c2430;border-radius:7px;font-size:11px"><div style="font-weight:800;color:#e6edf3;margin-bottom:5px">⚙️ 自動偵測 v1 <span style="color:#6e7681;font-weight:600">· 請對照 TV 校準</span></div><div class="d-body" style="color:#8b949e">等 K 線累積…</div></div>'
       +'<div class="l1-inputs">'
         +'<div class="l1-field"><label>進場 ENTRY</label><input id="l1entry" type="text" inputmode="decimal" placeholder="OTE 0.62"></div>'
         +'<div class="l1-field"><label>止損 SL (OB)</label><input id="l1sl" type="text" inputmode="decimal" placeholder="OB 上/下緣"></div>'
@@ -7270,15 +7325,16 @@ injectICTFlagshipGrid();
       +'</div>';
     anchor.insertAdjacentHTML('afterend', html);
     ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
-    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} });
+    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} try{paintDetect();}catch(_){} try{ var k=this.value; if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){} });
     var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
     renderCalc();
     try{ paintCandleStatus(); }catch(_){}
+    try{ paintDetect(); }catch(_){}
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} }, 1000); }catch(_){} }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
