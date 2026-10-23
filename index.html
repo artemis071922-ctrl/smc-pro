@@ -7059,6 +7059,29 @@ injectICTFlagshipGrid();
     if(k===curSym()) renderCalc();
   }
 
+  // 階段① Phase B 地基：OKX 真實 5M K 線流攝取
+  window.CANDLES=window.CANDLES||{};
+  function ingestCandles(k, rows){
+    var arr=window.CANDLES[k]||[]; var byT={};
+    arr.forEach(function(c){ byT[c.t]=c; });
+    rows.forEach(function(r){
+      var t=+r[0]; if(!t) return;
+      byT[t]={t:t, o:+r[1], h:+r[2], l:+r[3], c:+r[4], confirm:(r[8]!=null?+r[8]:1)};
+    });
+    var keys=Object.keys(byT).map(Number).sort(function(a,b){return a-b;});
+    arr=keys.map(function(t){return byT[t];});
+    if(arr.length>400) arr=arr.slice(-400);
+    window.CANDLES[k]=arr;
+    if(k===curSym()) paintCandleStatus();
+  }
+  function paintCandleStatus(){
+    var el=document.getElementById('l1candle'); if(!el) return;
+    var k=curSym(), arr=(window.CANDLES&&window.CANDLES[k])||[];
+    if(!arr.length){ el.innerHTML='📊 即時 5M K線：<span style="color:#d29922">連線中…</span>'; return; }
+    var last=arr[arr.length-1];
+    el.innerHTML='📊 即時 5M K線 · '+k+' · <b style="color:#e6edf3">'+arr.length+'</b> 根 · 最新收 <b style="color:#e6edf3">'+fmtPx(last.c,symDp(k))+'</b> <span style="color:#3fb950">● 流動中</span> <span style="color:#6e7681">（階段① 地基·待接偵測）</span>';
+  }
+
   function connect(){
     if(manualClosed) return;
     setStatus('connecting','OKX 連線中…');
@@ -7067,6 +7090,7 @@ injectICTFlagshipGrid();
     ws.onopen=function(){
       retry=0;
       ws.send(JSON.stringify({op:'subscribe',args:SYMS.map(function(s){return {channel:'tickers',instId:s.inst};})}));
+      ws.send(JSON.stringify({op:'subscribe',args:SYMS.map(function(s){return {channel:'candle5m',instId:s.inst};})}));
       clearInterval(pingTimer);
       pingTimer=setInterval(function(){ try{ if(ws&&ws.readyState===1) ws.send('ping'); }catch(_){} },20000);
     };
@@ -7077,6 +7101,8 @@ injectICTFlagshipGrid();
       if(msg.arg && msg.data && msg.data.length){
         var inst=msg.arg.instId, sym=null;
         for(var i=0;i<SYMS.length;i++){ if(SYMS[i].inst===inst){sym=SYMS[i];break;} } if(!sym) return;
+        var ch=msg.arg.channel||'';
+        if(ch.indexOf('candle')===0){ ingestCandles(sym.k, msg.data); setStatus('live','OKX 實時'); return; }
         var last=parseFloat(msg.data[0].last);
         if(!isNaN(last)){ window.LIVE_PX[sym.k]=last; paintPrice(sym.k); setStatus('live','OKX 實時'); }
       }
@@ -7194,6 +7220,7 @@ injectICTFlagshipGrid();
       else if(txt.indexOf('進場')===0){ t.textContent=drive? ('進場 '+fmtPx(c.entry,symDp(wrK))) : '進場 （範例）'; }
       else if(txt.indexOf('主 SL')===0){ t.textContent=drive? ('主 SL '+fmtPx(c.sl,symDp(wrK))) : '主 SL （範例）'; }
       else if(txt.indexOf('TP1')===0){ t.textContent=drive? ('TP1 '+fmtPx(c.tp,symDp(wrK))+rrTxt) : txt; }
+      else if(txt.indexOf('BSL')===0){ if(!drive) t.textContent='BSL （範例）'; }
     });
     var card=document.getElementById('highEntryCard');
     if(card && drive){
@@ -7214,6 +7241,7 @@ injectICTFlagshipGrid();
       +'<div class="l1-head">⚡ L1 即時計算器 · 手動驗算'
         +'<select id="l1sym"><option>BTC</option><option>ETH</option><option>SOL</option><option>XRP</option><option>TRX</option></select>'
         +'<span class="l1-live" id="l1livepx">BTC <b>待連線</b></span></div>'
+      +'<div id="l1candle" style="font-size:11px;color:#8b949e;font-weight:700;margin:-2px 0 10px;padding:6px 9px;background:#0d1220;border:1px solid #1c2430;border-radius:6px">📊 即時 5M K線：<span style="color:#d29922">連線中…</span></div>'
       +'<div class="l1-inputs">'
         +'<div class="l1-field"><label>進場 ENTRY</label><input id="l1entry" type="text" inputmode="decimal" placeholder="OTE 0.62"></div>'
         +'<div class="l1-field"><label>止損 SL (OB)</label><input id="l1sl" type="text" inputmode="decimal" placeholder="OB 上/下緣"></div>'
@@ -7242,11 +7270,12 @@ injectICTFlagshipGrid();
       +'</div>';
     anchor.insertAdjacentHTML('afterend', html);
     ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
-    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', renderCalc);
+    var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} });
     var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
     renderCalc();
+    try{ paintCandleStatus(); }catch(_){}
   }
 
   function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} }, 1000); }catch(_){} }
