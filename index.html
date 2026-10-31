@@ -6961,6 +6961,8 @@ injectICTFlagshipGrid();
 /* 戰情室圖表：依容器寬度自適應（去左右黑邊，比例不變形） */
 .warroom > .wr-chart { flex:0 0 auto !important; height:auto !important; min-height:0 !important; max-height:none !important; justify-content:flex-start !important; overflow-x:hidden !important; }
 .warroom > .wr-chart svg, .wr-chart svg { width:100% !important; height:auto !important; max-height:none !important; min-width:0 !important; }
+/* 真實 K 線圖上線後，隱藏舊示意圖的「待接 OKX 實體」殘留徽章 */
+.wr-chart[data-real="1"]::after { content:none !important; display:none !important; }
 
 /* OKX 狀態燈 */
 .okx-status .dot { transition:background .3s, box-shadow .3s; }
