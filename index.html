@@ -7141,6 +7141,21 @@ injectICTFlagshipGrid();
     var risk=Math.abs(entry-sl), reward=Math.abs(tp-entry), rr=risk>0?reward/risk:null;
     return {dir:dir,entry:entry,sl:sl,tp:tp,rr:rr,pos:pos};
   }
+  // 狀態：🟡醞釀中(位置到了，未觸發) vs 🟢已觸發(掃高/低 ＋ MSS 確認)
+  function setupTrigger(cs, d, dir){
+    var pv=swingPivots(cs,2,2), N=cs.length;
+    var rSH=pv.H.length>1?pv.H[pv.H.length-2].p:(pv.H.length?pv.H[pv.H.length-1].p:null);
+    var rSL=pv.L.length>1?pv.L[pv.L.length-2].p:(pv.L.length?pv.L[pv.L.length-1].p:null);
+    var swept=false;
+    for(var i=Math.max(0,N-6);i<N;i++){
+      if(dir==='short' && rSH!=null && cs[i].h>rSH && cs[i].c<rSH) swept=true;
+      if(dir==='long'  && rSL!=null && cs[i].l<rSL && cs[i].c>rSL) swept=true;
+    }
+    var mss=false, conflict=false;
+    if(d.evt){ var dn=d.evt.type.indexOf('↓')>=0, up=d.evt.type.indexOf('↑')>=0;
+      if(dir==='short'){ mss=dn; conflict=up; } else { mss=up; conflict=dn; } }
+    return {triggered:(swept&&mss), swept:swept, mss:mss, conflict:conflict};
+  }
   window.smcL1Apply=function(){
     if(!lastProposal || lastProposal.none) return;
     var dp=symDp(curSym()), f=Math.pow(10,dp);
@@ -7200,8 +7215,16 @@ injectICTFlagshipGrid();
     else {
       var dirTxt=prop.dir==='short'?'<span style="color:#f85149">做空 ▼（溢價 '+(prop.pos*100).toFixed(0)+'%）</span>':'<span style="color:#3fb950">做多 ▲（折扣 '+(prop.pos*100).toFixed(0)+'%）</span>';
       var rrCol=prop.rr==null?'#8b949e':(prop.rr>=2?'#3fb950':(prop.rr>=1.5?'#d29922':'#f85149'));
+      var trig=setupTrigger(cs,d,prop.dir);
+      var hiLo=prop.dir==='short'?'高':'低';
+      var stCol,stBg,stTxt,stNote;
+      if(trig.triggered){ stCol='#3fb950'; stBg='rgba(63,185,80,.14)'; stTxt='🟢 已觸發'; stNote='掃'+hiLo+'＋MSS 確認 · 可進，SL 貼掃'+hiLo+'點'; }
+      else if(trig.conflict){ stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote='⚠ 結構剛反向 · 當心，等重新確認再進'; }
+      else { stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote=(prop.dir==='short'?'溢價':'折扣')+'位置到了，但還沒掃'+hiLo+'＋MSS · 別在區間中間進，等 🟢'; }
+      var stBox='<div style="margin:2px 0 7px;padding:6px 9px;border-radius:6px;background:'+stBg+';border:1px solid '+stCol+'"><b style="color:'+stCol+';font-size:12px">'+stTxt+'</b> <span style="color:#8b949e;font-size:10px;font-family:monospace">掃'+hiLo+' '+(trig.swept?'✓':'—')+' · MSS '+(trig.mss?'✓':'—')+'</span><div style="color:#c9d1d9;font-size:10px;margin-top:2px">'+stNote+'</div></div>';
       ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">'
         +'<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">💡 提議 setup <span style="color:#6e7681;font-weight:600">· v1 近似，對照 TV 再下</span></div>'
+        +stBox
         +row('方向','<b>'+dirTxt+'</b>')
         +row('進場 OTE 0.705','<b style="font-family:monospace;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</b>')
         +row('止損 SL（擺動外）','<b style="font-family:monospace;color:#f85149">'+fmtPx(prop.sl,dp)+'</b>')
