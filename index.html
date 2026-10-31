@@ -7362,8 +7362,24 @@ injectICTFlagshipGrid();
 
   var lastCalc=null;
   function wrSymbol(){
+    // 讀儀表板真正的當前標的：RANK_DB/CURRENT_RANK 是頂層 const/let（全域詞法綁定，非 window 屬性），用裸名存取
+    try{ if(typeof RANK_DB!=='undefined' && typeof CURRENT_RANK!=='undefined' && RANK_DB[CURRENT_RANK]) return RANK_DB[CURRENT_RANK].sym; }catch(_){}
     try{ if(window.RANK_DB && window.CURRENT_RANK!=null && window.RANK_DB[window.CURRENT_RANK]) return window.RANK_DB[window.CURRENT_RANK].sym; }catch(_){}
     return 'BTC';
+  }
+  // 切戰情室標的時：L1 選單＋偵測＋回補 全部跟著同一個標的走（修「轉換時價格停在 BTC」）
+  var _lastSyncSym=null;
+  function syncSymbol(){
+    var k=wrSymbol();
+    if(['BTC','ETH','SOL','XRP','TRX'].indexOf(k)<0) return;
+    if(k===_lastSyncSym) return;
+    _lastSyncSym=k;
+    var sel=document.getElementById('l1sym');
+    if(sel && sel.value!==k) sel.value=k;
+    try{ if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){}
+    try{ renderCalc(); }catch(_){}
+    try{ paintCandleStatus(); }catch(_){}
+    try{ paintDetect(); }catch(_){}
   }
   // L1 真實鏡像 → 戰情室：現在=OKX真價；填了 L1 且標的相符才顯示你的真值，否則明標範例
   function syncWarRoom(){
@@ -7400,7 +7416,12 @@ injectICTFlagshipGrid();
   function renderRealChart(){
     var host=document.getElementById('wrChart'); if(!host) return;
     var k=wrSymbol(), cs=(window.CANDLES&&window.CANDLES[k])||[];
-    if(cs.length<10) return; // 真 K 線不足 → 暫留示意圖
+    if(cs.length<10){ // 真 K 線不足 → 顯示該標的「載入中」，不留上一個標的的舊圖
+      host.innerHTML='<button type="button" class="wr-chart-full" onclick="toggleChartFull(event)" title="放大／還原" aria-label="放大">⛶</button>'
+        +'<svg viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg"><rect width="1200" height="300" fill="#0E1116"/><text x="600" y="150" fill="#8b949e" font-size="20" font-weight="700" text-anchor="middle" font-family="sans-serif">'+k+' 5M · 載入即時 K 線中…</text></svg>';
+      try{ host.dataset.real='1'; }catch(_){}
+      return;
+    }
     var N=Math.min(cs.length,70), data=cs.slice(-N), dp=symDp(k);
     var live=(window.LIVE_PX&&typeof window.LIVE_PX[k]==='number')?window.LIVE_PX[k]:data[data.length-1].c;
     var c=lastCalc, plan=(c&&c.k===k&&c.entry!=null&&c.sl!=null&&c.tp!=null)?c:null;
@@ -7478,7 +7499,7 @@ injectICTFlagshipGrid();
     try{ paintDetect(); }catch(_){}
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
