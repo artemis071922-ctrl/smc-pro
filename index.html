@@ -7401,18 +7401,26 @@ injectICTFlagshipGrid();
       else if(txt.indexOf('TP1')===0){ t.textContent=drive? ('TP1 '+fmtPx(c.tp,symDp(wrK))+rrTxt) : txt; }
       else if(txt.indexOf('BSL')===0){ if(!drive) t.textContent='BSL （範例）'; }
     });
-    var card=document.getElementById('highEntryCard');
-    if(card && drive){
-      var e=card.querySelector('[data-target-line="entry"] .v');
-      var s=card.querySelector('[data-target-line="sl_main"] .v');
-      var tp=card.querySelector('.tp-table .v[data-target-line="tp1"]');
-      if(e) e.textContent=fmtPx(c.entry,symDp(wrK));
-      if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
-      if(tp) tp.textContent=fmtPx(c.tp,symDp(wrK));
-    }
-    // 戰情室決策三格（進場/主SL/小單SL）＋ TP：demo 殘留校正 → drive 顯真值，否則標範例（不再顯示假的 105k）
     var EX='（範例）';
     function sv(sel,v){ var el=document.querySelector(sel); if(el) el.textContent=v; }
+    // 右側高勝率進場卡的「價位」：drive 顯真值，否則標範例（分數/型號屬 RANK_DB 大改版，之後接）
+    var card=document.getElementById('highEntryCard');
+    if(card){
+      var e=card.querySelector('[data-target-line="entry"] .v');
+      var s=card.querySelector('[data-target-line="sl_main"] .v');
+      var t1=card.querySelector('.tp-table .v[data-target-line="tp1"]');
+      var t2=card.querySelector('.tp-table .v[data-target-line="tp2"]');
+      var t3=card.querySelector('.tp-table .v[data-target-line="tp3"]');
+      if(drive){
+        if(e) e.textContent=fmtPx(c.entry,symDp(wrK));
+        if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
+        if(t1) t1.textContent=fmtPx(c.tp,symDp(wrK));
+        if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
+      } else {
+        if(e) e.textContent=EX; if(s) s.textContent=EX;
+        if(t1) t1.textContent=EX; if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
+      }
+    }
     if(drive){
       sv('.warroom .wd-cell.entry .wd-val', fmtPx(c.entry,symDp(wrK)));
       sv('.warroom .wd-cell.sl .wd-val', fmtPx(c.sl,symDp(wrK)));
@@ -7515,7 +7523,7 @@ injectICTFlagshipGrid();
     try{ paintDetect(); }catch(_){}
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ backfillCandles('BTC'); var cs0=curSym(); if(cs0!=='BTC') backfillCandles(cs0); }catch(_){} }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
