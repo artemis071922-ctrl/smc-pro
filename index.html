@@ -2561,20 +2561,20 @@ body {
 
         <div class="resonance">
           <span class="led-pro red xlarge" id="resLight" style="margin-right:8px"></span>
-          <div class="res-text"><b>15M ⇄ 5M 共振</b><br><span style="color:var(--red)">同向看跌 ▼</span></div>
+          <div class="res-text"><b>15M ⇄ 5M 共振</b><br><span id="resText" style="color:var(--text-dim)">載入中…</span></div>
         </div>
 
         <div class="section-title">HTF 偏向</div>
         <div class="htf-bar">
-          <div class="htf-row"><span><span class="led-pro red small" style="margin-right:6px"></span>1H</span><span class="htf-arrow dn">▼ 看跌</span></div>
-          <div class="htf-row"><span><span class="led-pro red small" style="margin-right:6px"></span>15M</span><span class="htf-arrow dn">▼ 看跌</span></div>
-          <div class="htf-row"><span><span class="led-pro red small" style="margin-right:6px"></span>5M</span><span class="htf-arrow dn">▼ 看跌</span></div>
+          <div class="htf-row" data-htf="1H"><span><span class="led-pro idle small" style="margin-right:6px"></span>1H</span><span class="htf-arrow" style="color:var(--text-dim)">…</span></div>
+          <div class="htf-row" data-htf="15m"><span><span class="led-pro idle small" style="margin-right:6px"></span>15M</span><span class="htf-arrow" style="color:var(--text-dim)">…</span></div>
+          <div class="htf-row" data-htf="5m"><span><span class="led-pro idle small" style="margin-right:6px"></span>5M</span><span class="htf-arrow" style="color:var(--text-dim)">…</span></div>
         </div>
 
         <div class="section-title">雙引擎共振</div>
         <div class="htf-bar">
           <div class="htf-row"><span><span class="led-pro red" style="margin-right:6px"></span>TV Hull+UT</span><span class="htf-arrow dn">▼ 紅燈</span></div>
-          <div class="htf-row"><span><span class="led-pro red" style="margin-right:6px"></span>本地 SMC</span><span class="htf-arrow dn">▼ 紅燈</span></div>
+          <div class="htf-row" data-eng="smc"><span><span class="led-pro idle" style="margin-right:6px"></span>本地 SMC</span><span class="htf-arrow" style="color:var(--text-dim)">…</span></div>
         </div>
       </aside>
 
@@ -7384,6 +7384,7 @@ injectICTFlagshipGrid();
     try{ renderCalc(); }catch(_){}
     try{ paintCandleStatus(); }catch(_){}
     try{ paintDetect(); }catch(_){}
+    try{ refreshHTF(); }catch(_){}   // 換標的 → HTF 偏向跟著重算
   }
   // L1 真實鏡像 → 戰情室：現在=OKX真價；填了 L1 且標的相符才顯示你的真值，否則明標範例
   function syncWarRoom(){
@@ -7530,6 +7531,55 @@ injectICTFlagshipGrid();
     try{ paintDetect(); }catch(_){}
   }
 
+  // ───── 左側 HTF 偏向接真：用真 K 線算 1H/15M/5M 結構偏向（服務七條件 ②偏向）─────
+  window.HTFC=window.HTFC||{};   // {inst:{'1H':[],'15m':[],'5m':[]}}
+  function htfInst(){ var k=wrSymbol(); for(var i=0;i<SYMS.length;i++){ if(SYMS[i].k===k) return SYMS[i].inst; } return 'BTC-USDT-SWAP'; }
+  function htfBias(cs){
+    var d=null; try{ d=detectStructure(cs); }catch(_){}
+    if(!d) return {dir:'wait',txt:'…',col:'var(--text-dim)',led:'idle'};
+    if(d.bias==='bull') return {dir:'bull',txt:'▲ 看漲',col:'var(--green)',led:'green'};
+    if(d.bias==='bear') return {dir:'bear',txt:'▼ 看跌',col:'var(--red)',led:'red'};
+    var lean=(d.pos!=null&&d.pos>0.55)?' 偏空':(d.pos!=null&&d.pos<0.45?' 偏多':'');
+    return {dir:'range',txt:'◆ 區間'+lean,col:'var(--amber)',led:'amber'};
+  }
+  function renderHTF(){
+    var inst=htfInst(), store=window.HTFC[inst]||{}, bias={};
+    ['1H','15m','5m'].forEach(function(tf){ bias[tf]=htfBias(store[tf]||[]); });
+    ['1H','15m','5m'].forEach(function(tf){
+      var row=document.querySelector('.htf-row[data-htf="'+tf+'"]'); if(!row) return;
+      var led=row.querySelector('.led-pro'), arr=row.querySelector('.htf-arrow'), b=bias[tf];
+      if(led) led.className='led-pro '+b.led+' small';
+      if(arr){ arr.className='htf-arrow'; arr.textContent=b.txt; arr.style.color=b.col; }
+    });
+    var rt=document.getElementById('resText'), rl=document.getElementById('resLight'), a=bias['15m'], c=bias['5m'];
+    if(rt){
+      if(a.dir==='wait'||c.dir==='wait'){ rt.textContent='載入中…'; rt.style.color='var(--text-dim)'; if(rl) rl.className='led-pro idle xlarge'; }
+      else if(a.dir==='bull'&&c.dir==='bull'){ rt.textContent='同向看漲 ▲'; rt.style.color='var(--green)'; if(rl) rl.className='led-pro green xlarge'; }
+      else if(a.dir==='bear'&&c.dir==='bear'){ rt.textContent='同向看跌 ▼'; rt.style.color='var(--red)'; if(rl) rl.className='led-pro red xlarge'; }
+      else { rt.textContent='分歧 · 不共振'; rt.style.color='var(--amber)'; if(rl) rl.className='led-pro amber xlarge'; }
+    }
+    var se=document.querySelector('.htf-row[data-eng="smc"]');
+    if(se){ var l2=se.querySelector('.led-pro'), a2=se.querySelector('.htf-arrow'), b5=bias['5m'];
+      if(l2) l2.className='led-pro '+b5.led;
+      if(a2){ a2.className='htf-arrow'; a2.style.color=b5.col;
+        a2.textContent=b5.dir==='bull'?'▲ 綠燈':(b5.dir==='bear'?'▼ 紅燈':(b5.dir==='range'?'◆ 黃燈':'…')); }
+    }
+  }
+  function refreshHTF(){
+    var inst=htfInst(); window.HTFC[inst]=window.HTFC[inst]||{};
+    ['1H','15m','5m'].forEach(function(tf){
+      try{
+        fetch('https://www.okx.com/api/v5/market/candles?instId='+inst+'&bar='+tf+'&limit=100')
+          .then(function(r){ return r.json(); })
+          .then(function(j){ if(j&&j.code==='0'&&j.data&&j.data.length){
+            window.HTFC[inst][tf]=j.data.slice().reverse().map(function(r){ return {t:+r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4]}; });
+            try{ renderHTF(); }catch(_){}
+          } })
+          .catch(function(){});
+      }catch(_){}
+    });
+  }
+
   // 時框切換：點左側 1H/15M/5M/1M → 重訂閱該週期 K 線頻道＋重新回補＋重畫圖
   function switchTF(tf){
     if(!tf || tf===window.TF) return;
@@ -7558,7 +7608,7 @@ injectICTFlagshipGrid();
       });
     }catch(_){}
   }
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} }
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
