@@ -7410,6 +7410,22 @@ injectICTFlagshipGrid();
       if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
       if(tp) tp.textContent=fmtPx(c.tp,symDp(wrK));
     }
+    // 戰情室決策三格（進場/主SL/小單SL）＋ TP：demo 殘留校正 → drive 顯真值，否則標範例（不再顯示假的 105k）
+    var EX='（範例）';
+    function sv(sel,v){ var el=document.querySelector(sel); if(el) el.textContent=v; }
+    if(drive){
+      sv('.warroom .wd-cell.entry .wd-val', fmtPx(c.entry,symDp(wrK)));
+      sv('.warroom .wd-cell.sl .wd-val', fmtPx(c.sl,symDp(wrK)));
+      sv('.warroom .wd-cell.sl-small .wd-val', EX);
+      sv('.warroom .wd-tp[data-target-line="tp1"] .wd-tp-val', fmtPx(c.tp,symDp(wrK)));
+      sv('.warroom .wd-tp[data-target-line="tp2"] .wd-tp-val', EX);
+      sv('.warroom .wd-tp[data-target-line="tp3"] .wd-tp-val', EX);
+    } else {
+      sv('.warroom .wd-cell.entry .wd-val', EX);
+      sv('.warroom .wd-cell.sl .wd-val', EX);
+      sv('.warroom .wd-cell.sl-small .wd-val', EX);
+      ['tp1','tp2','tp3'].forEach(function(t){ sv('.warroom .wd-tp[data-target-line="'+t+'"] .wd-tp-val', EX); });
+    }
   }
 
   // 戰情室真實 K 線圖（唯讀）：畫 OKX 實時 5M K 棒＋疊偵測結構＋你的進場/SL/TP＋現價
