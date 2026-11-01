@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.32.0 · S1 Phase D 來源章 上線</span></div>
+    <div class="logo">smc-pro<span class="v">v0.33.0 · 回測引擎上線(吃卡vs幾何勝率)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7746,6 +7746,7 @@ injectICTFlagshipGrid();
       +'<div class="l1-actions">'
         +'<button class="l1-btn go" id="l1go">⚡ 開倉並建檔 (Phase D)</button>'
         +'<button class="l1-btn exp" id="l1exp">📥 CSV <span id="l1count" style="opacity:.7">— 筆</span></button>'
+        +'<button class="l1-btn exp" id="l1bt">🔬 回測</button>'
       +'</div>'
       +'<div class="l1-note">※ 計算器只做決策數學與建檔；下單仍在 TV 一鍵送 OKX。建檔＝當下七條件 LED＋現價快照，當下採集不回填，標 manual_verified。</div>'
       +'</div>';
@@ -7754,6 +7755,7 @@ injectICTFlagshipGrid();
     var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} try{paintDetect();}catch(_){} try{ var k=this.value; if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){} try{ renderRealChart(); }catch(_){} });
     var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
+    var bt=document.getElementById('l1bt'); if(bt) bt.addEventListener('click', function(){ if(window.smcBacktest) window.smcBacktest(); });
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
     renderCalc();
     try{ paintCandleStatus(); }catch(_){}
@@ -7837,6 +7839,79 @@ injectICTFlagshipGrid();
       });
     }catch(_){}
   }
+  // ══════ 回測引擎：replay 同一套純函式偵測 → forward-walk 到 TP/SL → 按來源分組勝率 ══════
+  async function fetchHistory(inst, bar, total){
+    var all=[], after='';
+    for(var k=0;k<Math.ceil(total/100)+1 && all.length<total;k++){
+      var url='https://www.okx.com/api/v5/market/history-candles?instId='+inst+'&bar='+bar+'&limit=100'+(after?('&after='+after):'');
+      var j; try{ j=await (await fetch(url)).json(); }catch(e){ break; }
+      if(!j||j.code!=='0'||!j.data||!j.data.length) break;
+      all=all.concat(j.data); after=j.data[j.data.length-1][0];
+      if(j.data.length<100) break;
+    }
+    return all.map(function(r){ return {t:+r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4]}; }).sort(function(a,b){ return a.t-b.t; });
+  }
+  function runBacktest(cs){
+    var trades=[], i=50, N=cs.length, maxWait=12, maxHold=72;
+    while(i<N-2){
+      var hist=cs.slice(0,i+1), d=detectStructure(hist);
+      if(!d){ i++; continue; }
+      var lv=detectLevels(hist,d), prop=proposeSetup(d,lv);
+      if(!prop||prop.none){ i++; continue; }
+      if(!setupTrigger(hist,d,prop.dir).triggered){ i++; continue; }
+      var reso=computeResonance(prop,lv,detectICTModels(hist),detectKbars(hist),detectHarmonic(hist),detectTrendline(hist),false);
+      var src=((prop.slSrc&&prop.slSrc.indexOf('⑤')>=0)||(prop.enSrc&&prop.enSrc.indexOf('⑬')>=0))?'card':'geometry';
+      var entry=prop.entry, sl=prop.sl, tp=prop.tp, dir=prop.dir, risk=Math.abs(entry-sl);
+      if(risk<=0){ i++; continue; }
+      var fill=-1;
+      for(var w=i+1;w<Math.min(N,i+1+maxWait);w++){ if(cs[w].l<=entry&&cs[w].h>=entry){ fill=w; break; } }
+      if(fill<0){ i++; continue; }
+      var oc=null, R=null, resb=fill;
+      for(var f=fill+1;f<Math.min(N,fill+1+maxHold);f++){
+        var hitSL=dir==='short'?cs[f].h>=sl:cs[f].l<=sl, hitTP=dir==='short'?cs[f].l<=tp:cs[f].h>=tp;
+        if(hitSL){ oc='sl'; R=-1; resb=f; break; }
+        if(hitTP){ oc='tp'; R=Math.abs(tp-entry)/risk; resb=f; break; }
+      }
+      if(!oc){ i=fill+1; continue; }
+      trades.push({source:src, tier:reso?reso.tier:'watch', fired:reso?reso.fired:0, dir:dir, outcome:oc, R:R});
+      i=resb+1;
+    }
+    function agg(ts){ if(!ts.length) return {n:0,win:0,avgR:0,totR:0}; var w=ts.filter(function(t){return t.outcome==='tp';}).length; var tot=ts.reduce(function(a,t){return a+t.R;},0); return {n:ts.length, win:Math.round(w/ts.length*100), avgR:Math.round(tot/ts.length*100)/100, totR:Math.round(tot*10)/10}; }
+    var by=function(f){ return agg(trades.filter(f)); };
+    return { trades:trades, summary:{ all:agg(trades),
+      card:by(function(t){return t.source==='card';}), geometry:by(function(t){return t.source==='geometry';}),
+      r3:by(function(t){return t.fired>=3;}), rlo:by(function(t){return t.fired<3;}),
+      high:by(function(t){return t.tier==='high';}), small:by(function(t){return t.tier==='small';}), watch:by(function(t){return t.tier==='watch';}) }};
+  }
+  function renderBacktestReport(sym, bar, res, bars){
+    var s=res.summary; function cell(a){ return a.n?('<b style="color:'+(a.win>=50?'#3fb950':'#f85149')+'">'+a.win+'% 勝</b> · '+a.avgR+'R均 · '+a.n+'筆 · 累'+a.totR+'R'):'<span style="color:#6e7681">—</span>'; }
+    function pair(l,c,col){ return '<span style="color:'+col+'">'+l+'</span><span>'+cell(c)+'</span>'; }
+    var html='<div id="btReport" style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.remove()">'
+      +'<div style="background:#11161f;border:1px solid #2b3240;border-radius:12px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px;font-family:var(--font-tc,sans-serif)">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:15px;color:#e6edf3">🔬 回測報告 · '+sym+' '+bar+'</b><span style="color:#8b949e;font-size:11px">'+bars+' 根 · 同一套偵測 replay</span><button onclick="document.getElementById(\'btReport\').remove()" style="margin-left:auto;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 10px;cursor:pointer">✕</button></div>'
+      +'<div style="font-size:12px;color:#c9d1d9;line-height:1.9">'
+      +'<div style="padding:8px 10px;background:#0d1220;border-radius:7px;margin-bottom:8px"><b style="color:#58A6FF">總覽</b> &nbsp;'+cell(s.all)+'</div>'
+      +'<div style="font-weight:800;color:#e6edf3;margin:6px 0 3px">🃏 吃卡 vs 幾何（關鍵對照）</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('吃卡',s.card,'#F0B90B')+pair('幾何',s.geometry,'#8b949e')+'</div>'
+      +'<div style="font-weight:800;color:#e6edf3;margin:8px 0 3px">共振強度</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('共振≥3庫',s.r3,'#3fb950')+pair('共振<3庫',s.rlo,'#8b949e')+'</div>'
+      +'<div style="font-weight:800;color:#e6edf3;margin:8px 0 3px">分級</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('高勝率',s.high,'#F0B90B')+pair('小單',s.small,'#d29922')+pair('監測',s.watch,'#8b949e')+'</div>'
+      +'<div style="font-size:10px;color:#6e7681;margin-top:10px;line-height:1.6">※ v1 模型：限價等 12 根成交、持倉 72 根內判 TP/SL、同根保守算 SL、KZ 權重回測時略過。樣本小＝參考值；真正要信，看實盤 DB 累積（GATE 鐵律）。權重會依此數據調。</div>'
+      +'</div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+  window.smcBacktest=async function(){
+    var k=curSym(), inst=null; for(var i=0;i<SYMS.length;i++){ if(SYMS[i].k===k){inst=SYMS[i].inst;break;} }
+    if(!inst){ toast('找不到標的','warn'); return; }
+    toast('🔬 回測中 · 抓 '+k+' '+window.TF+' 歷史…','normal');
+    try{
+      var cs=await fetchHistory(inst, window.TF, 1000);
+      if(cs.length<80){ toast('歷史不足（'+cs.length+' 根）· 可能被擋','warn'); return; }
+      var res=runBacktest(cs);
+      if(!res.trades.length){ toast('這段歷史無觸發交易（'+cs.length+' 根）','warn'); return; }
+      renderBacktestReport(k, window.TF, res, cs.length);
+      toast('🔬 回測完成 · '+res.trades.length+' 筆','normal');
+    }catch(e){ toast('回測失敗：'+(e&&e.message||e),'warn'); }
+  };
+
   function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
