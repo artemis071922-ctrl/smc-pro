@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.35.0 · 軍師卡+小單區接真(真掃描驅動)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.36.0 · OKX唯讀自動記錄骨架(API設定+抓成交+寫DB)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7718,6 +7718,112 @@ injectICTFlagshipGrid();
     try{ host.dataset.real='1'; }catch(_){}
   }
 
+  // ───── 🔑 OKX 唯讀自動記錄（骨架）· key 只存本機 localStorage，不外傳 ─────
+  var OKX_CFG='smc_okx_cfg', OKX_SEEN='smc_okx_seen', okxTimer=null;
+  function okxCfg(){ try{ return JSON.parse(localStorage.getItem(OKX_CFG)||'{}'); }catch(_){ return {}; } }
+  function okxSaveCfg(c){ try{ localStorage.setItem(OKX_CFG, JSON.stringify(c)); }catch(_){} }
+  function okxSeen(){ try{ return JSON.parse(localStorage.getItem(OKX_SEEN)||'{}'); }catch(_){ return {}; } }
+  function okxMarkSeen(m){ try{ localStorage.setItem(OKX_SEEN, JSON.stringify(m)); }catch(_){} }
+  function okxBase(c){ return (c.proxy&&c.proxy.trim())? c.proxy.trim().replace(/\/+$/,'') : 'https://www.okx.com'; }
+  function _b64(buf){ var b='',a=new Uint8Array(buf); for(var i=0;i<a.length;i++) b+=String.fromCharCode(a[i]); return btoa(b); }
+  async function okxSign(secret, ts, method, path, body){
+    var enc=new TextEncoder();
+    var key=await crypto.subtle.importKey('raw', enc.encode(secret), {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+    var sig=await crypto.subtle.sign('HMAC', key, enc.encode(ts+method+path+(body||'')));
+    return _b64(sig);
+  }
+  async function okxGet(path){ // path 含 query；唯讀 GET，已簽名
+    var c=okxCfg(); if(!c.key||!c.secret||!c.pass) throw new Error('未設定 key');
+    var ts=new Date().toISOString();
+    var sign=await okxSign(c.secret, ts, 'GET', path, '');
+    var r=await fetch(okxBase(c)+path, {method:'GET', headers:{
+      'OK-ACCESS-KEY':c.key, 'OK-ACCESS-SIGN':sign, 'OK-ACCESS-TIMESTAMP':ts, 'OK-ACCESS-PASSPHRASE':c.pass, 'Content-Type':'application/json'
+    }});
+    var j; try{ j=await r.json(); }catch(e){ throw new Error('HTTP '+r.status+' 非 JSON 回應'); }
+    if(j.code && j.code!=='0') throw new Error('OKX '+j.code+' '+(j.msg||''));
+    return j.data||[];
+  }
+  function okxSetState(txt,cls){ var e=document.getElementById('l1okxState'); if(!e) return; e.textContent=txt; e.style.background=cls==='on'?'rgba(63,185,80,0.2)':(cls==='err'?'rgba(248,81,73,0.2)':'#30363d'); e.style.color=cls==='on'?'#3fb950':(cls==='err'?'#ff6855':'#8b949e'); }
+  function okxSetStatus(html){ var e=document.getElementById('okxStatus'); if(e) e.innerHTML=html; }
+  async function okxTest(){
+    okxSetStatus('測試中…');
+    try{
+      var d=await okxGet('/api/v5/account/config');
+      var a=(d&&d[0])||{};
+      okxSetStatus('✅ 連線成功 · acctLv '+(a.acctLv||'?')+' · posMode '+(a.posMode||'?')+'<br>key 有效、CORS 通。可以啟用自動記錄。');
+      okxSetState('已驗證','on');
+    }catch(e){
+      var m=String(e&&e.message||e);
+      var hint=/Failed to fetch|NetworkError|CORS|Load failed/i.test(m)?'<br>⚠ 多半是 CORS 被擋 → 填上方 Proxy（Cloudflare Worker）再試。':'';
+      okxSetStatus('❌ 失敗：'+m+hint);
+      okxSetState('錯誤','err');
+    }
+  }
+  function okxInstToSym(instId){ for(var i=0;i<SYMS.length;i++){ if(SYMS[i].inst===instId) return SYMS[i].k; } return (instId||'').split('-')[0]; }
+  async function okxPollFills(){
+    var c=okxCfg(); if(!c.enabled||!c.key) return;
+    var data;
+    try{ data=await okxGet('/api/v5/trade/fills?instType=SWAP&limit=100'); }
+    catch(e){ okxSetStatus('⚠ 抓取失敗：'+(e&&e.message||e)+' · '+_hhmm(Date.now())); okxSetState('錯誤','err'); return; }
+    var seen=okxSeen(), log=readLog(), added=0;
+    data.slice().reverse().forEach(function(f){        // fills 新→舊，反轉成舊→新寫入
+      var id=f.tradeId||f.billId; if(!id||seen[id]) return; seen[id]=1;
+      var sym=okxInstToSym(f.instId);
+      var det=(window.lastDetect && window.lastDetect.sym===sym)?window.lastDetect:null;
+      var R=det&&det.reso, P=det&&det.prop;
+      var srcMode=(P&&((P.slSrc&&P.slSrc.indexOf('⑤')>=0)||(P.enSrc&&P.enSrc.indexOf('⑬')>=0)))?'card':(P?'geometry':null);
+      var allCards=det?[].concat(det.ict||[],det.kb||[],det.hm||[],det.tl||[]).map(function(m){return m.num;}).join(','):null;
+      log.push({
+        log_id:'okx_'+id, timestamp:new Date(+f.ts).toISOString(), version:'okx-auto', kind:'auto_fill',
+        symbol:sym, inst:f.instId, side:(f.side==='sell'?'short':'long'), pos_side:f.posSide||null,
+        entry_price:+f.fillPx, fill_sz:+f.fillSz, ord_id:f.ordId, exec_type:f.execType||null, fee:(f.fee!=null&&f.fee!=='')?+f.fee:null,
+        pine_triggered:false, manual_verified:false, auto_source:'okx_fills',
+        score:R?R.score:null, score_tier:R?R.tier:null,
+        resonance_score:R?R.score:null, resonance_tier:R?R.tier:null, resonance_fired:R?R.fired:null,
+        resonance_lights:R?JSON.stringify(R.lights):null, resonance_breakdown:R?R.brk.join(' '):null,
+        signal_source:srcMode, sl_source:P?P.slSrc:null, entry_source:P?P.enSrc:null, cards_detected:allCards,
+        outcome:null, realized_pnl:null, exit_reason:null
+      });
+      added++;
+    });
+    if(added){ writeLog(log); okxMarkSeen(seen); var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆'; }
+    okxSetStatus('🟢 自動記錄中 · 最後抓取 '+_hhmm(Date.now())+' · 本次新增 '+added+' 筆 · DB 共 '+readLog().length+' 筆<br><span style="color:#6e7681">※ 開/平倉配對算真 R:R＝下一步</span>');
+    okxSetState('記錄中','on');
+  }
+  function okxStartTimer(){ okxStopTimer(); okxTimer=setInterval(function(){ try{ okxPollFills(); }catch(_){} }, 30000); }
+  function okxStopTimer(){ if(okxTimer){ clearInterval(okxTimer); okxTimer=null; } }
+  function okxToggle(){
+    var c=okxCfg();
+    if(!c.key||!c.secret||!c.pass){ okxSetStatus('⚠ 請先填 key / secret / passphrase 並按「儲存」'); return; }
+    c.enabled=!c.enabled; okxSaveCfg(c);
+    var btn=document.getElementById('okxToggleBtn');
+    if(c.enabled){ if(btn) btn.textContent='⏸ 停用自動記錄'; okxSetState('記錄中','on'); okxPollFills(); okxStartTimer(); }
+    else { if(btn) btn.textContent='▶ 啟用自動記錄'; okxSetState('已暫停',''); okxStopTimer(); okxSetStatus('⏸ 已暫停自動記錄'); }
+  }
+  function okxSaveFromUI(){
+    var c=okxCfg();
+    var k=document.getElementById('okxKey'), s=document.getElementById('okxSecret'), p=document.getElementById('okxPass'), px=document.getElementById('okxProxy');
+    if(k&&k.value.trim()) c.key=k.value.trim();
+    if(s&&s.value.trim()) c.secret=s.value.trim();
+    if(p&&p.value.trim()) c.pass=p.value.trim();
+    c.proxy=px?px.value.trim():'';
+    okxSaveCfg(c);
+    if(s){ s.value=''; s.placeholder='已儲存 ••••'; }
+    if(p){ p.value=''; p.placeholder='已儲存 ••••'; }
+    okxSetStatus('💾 已儲存（只存本機）· 按「測試連線」確認 key＋CORS');
+    okxSetState(c.key?'已設定':'未啟用','');
+  }
+  function okxInitUI(){
+    var c=okxCfg();
+    var k=document.getElementById('okxKey'); if(k&&c.key) k.value=c.key;
+    var px=document.getElementById('okxProxy'); if(px&&c.proxy) px.value=c.proxy;
+    var s=document.getElementById('okxSecret'); if(s&&c.secret) s.placeholder='已儲存 ••••';
+    var p=document.getElementById('okxPass'); if(p&&c.pass) p.placeholder='已儲存 ••••';
+    var btn=document.getElementById('okxToggleBtn');
+    if(c.enabled){ if(btn) btn.textContent='⏸ 停用自動記錄'; okxSetState('記錄中','on'); okxStartTimer(); okxPollFills(); }
+    else if(c.key){ okxSetState('已設定',''); okxSetStatus('已設定 · 未啟用。按「測試連線」或「啟用自動記錄」'); }
+  }
+
   function buildCalc(){
     if(document.querySelector('#smcL1panel')) return;
     var anchor=document.getElementById('wrChart'); if(!anchor) return;
@@ -7754,6 +7860,28 @@ injectICTFlagshipGrid();
         +'<button class="l1-btn exp" id="l1bt">🔬 回測</button>'
       +'</div>'
       +'<div class="l1-note">※ 計算器只做決策數學與建檔；下單仍在 TV 一鍵送 OKX。建檔＝當下七條件 LED＋現價快照，當下採集不回填，標 manual_verified。</div>'
+      // ───── 🔑 OKX 唯讀自動記錄（骨架）─────
+      +'<div id="l1okx" style="margin-top:10px;border-top:1px solid #1c2430;padding-top:10px">'
+        +'<div id="l1okxHead" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:800;color:#e6edf3;font-size:12px">'
+          +'<span>🔑 OKX 自動記錄</span>'
+          +'<span id="l1okxState" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:#30363d;color:#8b949e">未啟用</span>'
+          +'<span id="l1okxCaret" style="margin-left:auto;color:#6e7681;font-size:12px">▸</span>'
+        +'</div>'
+        +'<div id="l1okxBody" style="display:none;margin-top:8px">'
+          +'<div style="font-size:10px;color:#d29922;background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.3);border-radius:6px;padding:6px 8px;line-height:1.5;margin-bottom:8px">⚠ 只用「唯讀」API key（Read 權限，<b>關掉 Trade / 提幣</b>）。key 只存你本機瀏覽器、不會外傳；別把這頁或這台裝置給別人。</div>'
+          +'<div class="l1-field"><label>API Key</label><input id="okxKey" type="text" autocomplete="off" spellcheck="false" placeholder="唯讀 key"></div>'
+          +'<div class="l1-field"><label>Secret Key</label><input id="okxSecret" type="password" autocomplete="off" placeholder="secret"></div>'
+          +'<div class="l1-field"><label>Passphrase</label><input id="okxPass" type="password" autocomplete="off" placeholder="passphrase"></div>'
+          +'<div class="l1-field"><label>Proxy（選填·CORS 被擋才填）</label><input id="okxProxy" type="text" autocomplete="off" spellcheck="false" placeholder="https://你的-worker.workers.dev"></div>'
+          +'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+            +'<button class="l1-btn exp" id="okxSaveBtn">💾 儲存</button>'
+            +'<button class="l1-btn exp" id="okxTestBtn">🔌 測試連線</button>'
+            +'<button class="l1-btn go" id="okxToggleBtn">▶ 啟用自動記錄</button>'
+          +'</div>'
+          +'<div id="okxStatus" style="margin-top:8px;font-size:11px;color:#8b949e;background:#0d1220;border:1px solid #1c2430;border-radius:6px;padding:7px 9px;line-height:1.6">狀態：未設定</div>'
+          +'<div style="font-size:10px;color:#6e7681;margin-top:6px;line-height:1.5">※ 骨架版：先抓成交(fills)寫 DB＋蓋來源章。開/平倉配對算真實 R:R 勝率＝下一步，需你實盤校準。</div>'
+        +'</div>'
+      +'</div>'
       +'</div>';
     anchor.insertAdjacentHTML('afterend', html);
     ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
@@ -7762,6 +7890,12 @@ injectICTFlagshipGrid();
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
     var bt=document.getElementById('l1bt'); if(bt) bt.addEventListener('click', function(){ if(window.smcBacktest) window.smcBacktest(); });
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆';
+    // 🔑 OKX 自動記錄 wiring
+    var okxH=document.getElementById('l1okxHead'); if(okxH) okxH.addEventListener('click', function(){ var b=document.getElementById('l1okxBody'), ca=document.getElementById('l1okxCaret'); if(b){ var open=b.style.display==='none'; b.style.display=open?'block':'none'; if(ca) ca.textContent=open?'▾':'▸'; } });
+    var okxSv=document.getElementById('okxSaveBtn'); if(okxSv) okxSv.addEventListener('click', okxSaveFromUI);
+    var okxTs=document.getElementById('okxTestBtn'); if(okxTs) okxTs.addEventListener('click', function(){ okxTest(); });
+    var okxTg=document.getElementById('okxToggleBtn'); if(okxTg) okxTg.addEventListener('click', okxToggle);
+    try{ okxInitUI(); }catch(_){}
     renderCalc();
     try{ paintCandleStatus(); }catch(_){}
     try{ paintDetect(); }catch(_){}
