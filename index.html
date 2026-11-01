@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.29.1 · 吃圖卡 庫1(⑤SL⑬進場)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.29.2 · 吃圖卡 庫2 K線26 偵測上線</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7286,6 +7286,49 @@ injectICTFlagshipGrid();
       if(d.bias==='bull'&&d.pos>=0.21&&d.pos<=0.38) out.push({num:'OTE',name:'OTE 進場區',dir:'long',note:(d.pos*100).toFixed(0)+'% 折扣'}); }
     return out;
   }
+  // 吃圖卡 · 庫2 K線26：即時偵測可由 OHLC 判定的 17 張 K 線卡
+  function detectKbars(cs){
+    var out=[], N=cs?cs.length:0; if(N<3) return out;
+    var c0=cs[N-1], c1=cs[N-2], c2=cs[N-3];
+    function body(c){return Math.abs(c.c-c.o);}
+    function rng(c){return (c.h-c.l)||1e-9;}
+    function up(c){return c.h-Math.max(c.o,c.c);}
+    function dn(c){return Math.min(c.o,c.c)-c.l;}
+    function bull(c){return c.c>c.o;} function bear(c){return c.c<c.o;}
+    var b0=body(c0), r0=rng(c0), mid1=(c1.o+c1.c)/2;
+    // 十字家族
+    if(b0<=r0*0.1){
+      if(dn(c0)>=r0*0.6 && up(c0)<=r0*0.15) out.push({num:'KP20',name:'蜻蜓十字',dir:'long',note:'長下影十字·見底'});
+      else if(up(c0)>=r0*0.6 && dn(c0)<=r0*0.15) out.push({num:'KP21',name:'墓碑十字',dir:'short',note:'長上影十字·見頂'});
+      else out.push({num:'KP5',name:'十字星',dir:'neutral',note:'多空拉鋸·觀望'});
+    }
+    // 單根長影
+    if(b0>r0*0.1 && b0<=r0*0.4){
+      if(dn(c0)>=b0*2 && up(c0)<=b0*0.6) out.push({num:'KP1',name:'錘子線',dir:'long',note:'長下影·下方承接'});
+      if(up(c0)>=b0*2 && dn(c0)<=b0*0.6) out.push({num:'KP4',name:'射擊之星',dir:'short',note:'長上影·上方受壓'});
+    }
+    // 光頭光腳
+    if(b0>=r0*0.9) out.push({num:'KP15',name:'光頭光腳',dir:bull(c0)?'long':'short',note:'滿實體·'+(bull(c0)?'強多':'強空')+'動能'});
+    // 吞噬
+    if(bear(c1)&&bull(c0)&&c0.c>=c1.o&&c0.o<=c1.c&&body(c0)>body(c1)) out.push({num:'KP6',name:'看漲吞噬',dir:'long',note:'多方吞沒前紅'});
+    if(bull(c1)&&bear(c0)&&c0.o>=c1.c&&c0.c<=c1.o&&body(c0)>body(c1)) out.push({num:'KP7',name:'看跌吞噬',dir:'short',note:'空方吞沒前綠'});
+    // 孕線
+    if(Math.max(c0.o,c0.c)<=Math.max(c1.o,c1.c)&&Math.min(c0.o,c0.c)>=Math.min(c1.o,c1.c)&&body(c1)>body(c0)*1.5) out.push({num:'KP10',name:'孕線',dir:bear(c1)?'long':'short',note:'動能收斂·可能反轉'});
+    // 烏雲/刺穿
+    if(bull(c1)&&bear(c0)&&c0.o>c1.h&&c0.c<mid1&&c0.c>c1.o) out.push({num:'KP8',name:'烏雲蓋頂',dir:'short',note:'高開收破中點'});
+    if(bear(c1)&&bull(c0)&&c0.o<c1.l&&c0.c>mid1&&c0.c<c1.o) out.push({num:'KP9',name:'刺穿型態',dir:'long',note:'低開收過中點'});
+    // 鑷子
+    if(Math.abs(c0.l-c1.l)<=r0*0.05&&bear(c1)&&bull(c0)) out.push({num:'KP18',name:'鑷子底',dir:'long',note:'雙底同價·見底'});
+    if(Math.abs(c0.h-c1.h)<=r0*0.05&&bull(c1)&&bear(c0)) out.push({num:'KP19',name:'鑷子頂',dir:'short',note:'雙頂同價·見頂'});
+    // 晨星/黃昏星
+    if(bear(c2)&&body(c2)>rng(c2)*0.5&&body(c1)<rng(c1)*0.4&&bull(c0)&&c0.c>(c2.o+c2.c)/2) out.push({num:'KP11',name:'晨星',dir:'long',note:'三根打底反轉'});
+    if(bull(c2)&&body(c2)>rng(c2)*0.5&&body(c1)<rng(c1)*0.4&&bear(c0)&&c0.c<(c2.o+c2.c)/2) out.push({num:'KP12',name:'黃昏星',dir:'short',note:'三根做頭反轉'});
+    // 三白兵/三烏鴉
+    if(bull(c2)&&bull(c1)&&bull(c0)&&c0.c>c1.c&&c1.c>c2.c) out.push({num:'KP13',name:'三白兵',dir:'long',note:'連三紅·強多'});
+    if(bear(c2)&&bear(c1)&&bear(c0)&&c0.c<c1.c&&c1.c<c2.c) out.push({num:'KP14',name:'三烏鴉',dir:'short',note:'連三黑·強空'});
+    return out;
+  }
+
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7321,13 +7364,17 @@ injectICTFlagshipGrid();
         +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
         +'</div>';
     }
-    var models=detectICTModels(cs), mh='';
-    if(models.length){
-      mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240"><div style="font-weight:800;color:#e6edf3;margin-bottom:5px">🃏 偵測到的旗艦卡 <span style="color:#6e7681;font-weight:600">· ICT 庫 v1</span></div>';
-      models.forEach(function(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
-        mh+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:22px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'做空▼':(m.dir==='long'?'做多▲':''))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; });
-      mh+='</div>';
-    } else { mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#6e7681">🃏 旗艦卡：暫無明確型態（ICT 庫 v1）</div>'; }
+    var ict=detectICTModels(cs), kb=detectKbars(cs), mh='';
+    function cardRow(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:30px;font-size:10px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'空▼':(m.dir==='long'?'多▲':'◆'))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; }
+    var libsFired=(ict.length?1:0)+(kb.length?1:0);  // 共振：目前庫1 ICT + 庫2 K線（庫3/4 建置中）
+    mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">';
+    mh+='<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">🃏 四庫偵測 <span style="color:#58A6FF;font-weight:700;font-size:10px;background:rgba(88,166,255,.12);padding:1px 6px;border-radius:4px">共振 '+libsFired+'/4 庫</span></div>';
+    if(ict.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:3px 0 1px;letter-spacing:.5px">庫1 ICT</div>'; ict.forEach(function(m){ mh+=cardRow(m); }); }
+    if(kb.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫2 K線</div>'; kb.forEach(function(m){ mh+=cardRow(m); }); }
+    if(!ict.length && !kb.length) mh+='<div style="color:#6e7681;padding:2px 0">暫無明確型態</div>';
+    mh+='<div style="font-size:9px;color:#4a515c;margin-top:5px">庫3 趨勢線 · 庫4 諧波：即時偵測建置中（Track B）</div>';
+    mh+='</div>';
     body.innerHTML=base+mh+ph;
   }
 
