@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.33.1 · 共振卡加進場/停損/止盈價位</span></div>
+    <div class="logo">smc-pro<span class="v">v0.34.0 · 排位卡接真(真共振分取代demo)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7917,7 +7917,49 @@ injectICTFlagshipGrid();
     }catch(e){ toast('回測失敗：'+(e&&e.message||e),'warn'); }
   };
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} }
+  // 全部接真 · 階段2：每標的真共振分 → 驅動 5 張排位卡（取代 RANK_DB demo 顯示）
+  function symbolResonance(k){
+    var cs=(window.CANDLES&&window.CANDLES[k])||[];
+    if(cs.length<20) return {none:true,reason:'K線不足'};
+    var d; try{ d=detectStructure(cs); }catch(_){ return {none:true}; } if(!d) return {none:true,reason:'結構未成形'};
+    var lv=detectLevels(cs,d), prop=proposeSetup(d,lv);
+    if(!prop||prop.none) return {none:true, reason:(prop&&prop.reason)||'等結構', pos:d.pos};
+    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
+    var reso=computeResonance(prop,lv,ict,kb,hm,tl,kzActive());
+    var model = ict.length?(ict[0].num+' '+ict[0].name.split(' ')[0].split('/')[0]) : (kb.length?(kb[0].num+' '+kb[0].name) : (prop.dir==='short'?'溢價回撤':'折扣回撤'));
+    return {score:reso?reso.score:null, tier:reso?reso.tier:'watch', dir:prop.dir, model:model, fired:reso?reso.fired:0};
+  }
+  function refreshRankCards(){
+    if(typeof SYMS==='undefined') return;
+    SYMS.forEach(function(s){
+      var card=document.querySelector('.rs-card[data-sym="'+s.k+'"]'); if(!card) return;
+      var r; try{ r=symbolResonance(s.k); }catch(_){ return; }
+      var arrEl=card.querySelector('.rs-arrow'), scEl=card.querySelector('.rs-score'), ledEl=card.querySelector('.rs-led'), mdEl=card.querySelector('.rs-model'), fill=card.querySelector('.rs-fill');
+      if(!r || r.none || r.score==null){
+        if(scEl){ scEl.textContent='—'; scEl.className='rs-score s-low'; }
+        if(mdEl) mdEl.innerHTML='<span style="color:#6e7681">監測中</span>';
+        if(arrEl){ arrEl.className='rs-arrow'; arrEl.innerHTML='<span style="color:#6e7681">◆觀望</span>'; }
+        if(ledEl) ledEl.className='rs-led'; if(fill) fill.style.width='0%';
+        return;
+      }
+      var isS=r.dir==='short';
+      if(scEl){ scEl.textContent=r.score; scEl.className='rs-score '+(r.score>=75?'s-high':(r.score>=65?'s-mid':'s-low')); }
+      if(arrEl){ arrEl.className='rs-arrow '+(isS?'short':'long'); arrEl.innerHTML='<b>'+(isS?'▼':'▲')+'</b>'+(isS?'做空':'做多'); }
+      if(ledEl) ledEl.className='rs-led '+(isS?'red':'green');
+      if(mdEl) mdEl.innerHTML=r.model+' <span style="color:var(--'+(isS?'red':'green')+')">'+(isS?'▼':'▲')+'</span>';
+      if(fill){ fill.style.width=r.score+'%'; fill.style.background=isS?'#ff6855':'#3fb950'; }
+    });
+    // 戰情室 hero 大分數 + 高勝率卡分數 接真（當前標的）
+    try{ var wr=symbolResonance(wrSymbol());
+      if(wr && !wr.none && wr.score!=null){
+        var ws=document.getElementById('wrScore'); if(ws) ws.textContent=wr.score;
+        var scn=document.querySelector('#highEntryCard .card-score-num'); if(scn) scn.textContent=wr.score;
+        var scf=document.querySelector('#highEntryCard .score-fill'); if(scf) scf.style.width=wr.score+'%';
+      }
+    }catch(_){}
+  }
+
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} try{ setInterval(function(){ try{ refreshRankCards(); }catch(_){} }, 2000); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
