@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.34.0 · 排位卡接真(真共振分取代demo)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.35.0 · 軍師卡+小單區接真(真掃描驅動)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7925,9 +7925,16 @@ injectICTFlagshipGrid();
     var lv=detectLevels(cs,d), prop=proposeSetup(d,lv);
     if(!prop||prop.none) return {none:true, reason:(prop&&prop.reason)||'等結構', pos:d.pos};
     var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
-    var reso=computeResonance(prop,lv,ict,kb,hm,tl,kzActive());
+    var inKz=kzActive();
+    var reso=computeResonance(prop,lv,ict,kb,hm,tl,inKz);
+    var trig; try{ trig=setupTrigger(cs,d,prop.dir); }catch(_){ trig={triggered:false,swept:false,mss:false,conflict:false}; }
     var model = ict.length?(ict[0].num+' '+ict[0].name.split(' ')[0].split('/')[0]) : (kb.length?(kb[0].num+' '+kb[0].name) : (prop.dir==='short'?'溢價回撤':'折扣回撤'));
-    return {score:reso?reso.score:null, tier:reso?reso.tier:'watch', dir:prop.dir, model:model, fired:reso?reso.fired:0};
+    var ch = prop.dir==='short' ? 'Ch5 · Ch11 · Ch13' : 'Ch10 · Ch13';
+    var last=cs[cs.length-1];
+    return {score:reso?reso.score:null, tier:reso?reso.tier:'watch', dir:prop.dir, model:model, fired:reso?reso.fired:0,
+            entry:prop.entry, sl:prop.sl, tp:prop.tp, rr:prop.rr, slSrc:prop.slSrc, enSrc:prop.enSrc, pos:prop.pos,
+            inKz:inKz, lights:reso?reso.lights:null, brk:reso?reso.brk:[], trig:trig, lv:lv, ch:ch,
+            close:last?last.c:null, tms:last?last.t:null};
   }
   function refreshRankCards(){
     if(typeof SYMS==='undefined') return;
@@ -7959,7 +7966,110 @@ injectICTFlagshipGrid();
     }catch(_){}
   }
 
-  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} try{ setInterval(function(){ try{ refreshRankCards(); }catch(_){} }, 2000); }catch(_){} }
+  // 全部接真 · 階段3：軍師卡 + 小單區 → 真掃描驅動（取代 demo 73/100、105,080）
+  function _sma(cs,n,sel){ if(!cs||cs.length<n) return null; var s=0; for(var i=cs.length-n;i<cs.length;i++) s+=sel(cs[i]); return s/n; }
+  function _ema(vals,n){ if(!vals||vals.length<n) return null; var k=2/(n+1), e=vals[0]; for(var i=1;i<vals.length;i++) e=vals[i]*k+e*(1-k); return e; }
+  function _fmtPx(v,k){ if(v==null||isNaN(v)) return '—'; var dp=symDp(k); return dp===0?Math.round(v).toLocaleString():v.toFixed(dp); }
+  function _hhmm(ms){ if(!ms) return '--:--'; var dt=new Date(ms); return ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2); }
+  function _advConds(r){
+    var c=[];
+    c.push({label:(r.pos>=0.6?'溢價區 '+(r.pos*100).toFixed(0)+'%（偏空）':(r.pos<=0.4?'折扣區 '+(r.pos*100).toFixed(0)+'%（偏多）':'均衡區 '+(r.pos*100).toFixed(0)+'%')), pass:(r.pos>=0.6||r.pos<=0.4)});
+    c.push({label:'掃流動性 '+(r.slSrc||''), pass:!!(r.trig&&r.trig.swept)});
+    c.push({label:'MSS 結構轉換確認', pass:!!(r.trig&&r.trig.mss)});
+    c.push({label:'進場 '+(r.enSrc||'OTE'), pass:(r.enSrc||'').indexOf('FVG')>=0});
+    c.push({label:(r.inKz?'KZ 時段內 ✓':'KZ 時段外（等殺傷區）'), pass:!!r.inKz});
+    c.push({label:'共振 '+r.score+' 分 '+(r.score>=75?'≥75 高勝率':(r.score>=65?'≥65 小單':'<65 觀望')), pass:r.score>=65});
+    return c;
+  }
+  function _advStatus(r){ return (r.trig&&r.trig.triggered&&r.score>=65)?'active':(((r.pos>=0.6||r.pos<=0.4)&&r.score>=50)?'pending':'expired'); }
+  function paintSmallZone(r){
+    if(!r) return; var k=r.sym, isS=r.dir==='short';
+    var cs=(window.CANDLES&&window.CANDLES[k])||[];
+    var closes=cs.map(function(c){return c.c;});
+    var ma5=_sma(cs,5,function(c){return c.c;}), ma20=_sma(cs,20,function(c){return c.c;});
+    var ma20prev=_sma(cs.slice(0,-3),20,function(c){return c.c;});
+    var e12=_ema(closes.slice(-60),12), e26=_ema(closes.slice(-60),26);
+    var want=!isS; // 做多要漲動能
+    var maUp=(ma5!=null&&ma20!=null)?(ma5>=ma20):null;
+    var macdUp=(e12!=null&&e26!=null)?(e12>=e26):null;
+    var biasUp=(ma20!=null&&ma20prev!=null)?(ma20>=ma20prev):null;
+    var lamp1=(maUp===want), lamp2=(macdUp===want), lamp3=(biasUp===want);
+    var cells=document.querySelectorAll('.sm-lamp .sm-cell');
+    var paintCell=function(idx,on,txtOn,txtOff){
+      if(cells.length<=idx) return; var cell=cells[idx];
+      var led=cell.querySelector('.sm-lamp-led'), res=cell.querySelector('.sm-cell-result');
+      if(led) led.className='led-pro '+(on?'green':'red')+' sm-lamp-led';
+      if(res){ res.className='sm-cell-result '+(on?'green':'red'); res.textContent=(on?txtOn:txtOff); }
+    };
+    paintCell(0,lamp1,(maUp?'金叉 ✓':'死叉 ✓'),(maUp?'金叉 ✗':'死叉 ✗'));
+    paintCell(1,lamp2,(macdUp?'正動能 ✓':'負動能 ✓'),(macdUp?'正動能 ✗':'負動能 ✗'));
+    paintCell(2,lamp3,'偏向同向 ✓','偏向背離 ✗');
+    var allGreen=lamp1&&lamp2&&lamp3;
+    var ms=document.getElementById('momStatus');
+    if(ms){ ms.className='mom-status '+(allGreen?'go':'wait'); ms.innerHTML=(allGreen?'▶ 三燈全綠 · ':'◐ 動能未齊 · ')+(isS?'看跌':'看漲')+'動能 · '+k+' 小單'+(allGreen?'可發':'待確認'); }
+    var th=document.getElementById('smTriggerHint'); if(th) th.textContent=allGreen?'觸發中 · 短窗':'監測中';
+    // 小單卡
+    var risk=Math.abs(r.entry-r.sl)||0, tp=isS?(r.entry-risk):(r.entry+risk);
+    var title=document.querySelector('.smentry-title');
+    if(title){ title.innerHTML='⚡ '+r.model+' <span style="color:var(--'+(isS?'red':'green')+')">'+(isS?'▼':'▲')+'</span> <span style="font-weight:800;font-family:var(--font-mono);color:var(--'+(r.score>=75?'amber':'amber')+')">'+r.score+'</span> <span style="color:var(--text-dim);font-size:11px;font-weight:600;margin-left:6px">'+k+' · 獨立</span>'; }
+    var en=document.getElementById('smEntry'); if(en) en.textContent=_fmtPx(r.entry,k);
+    var slRow=document.querySelector('.sm-row[data-target-line="sl_small"] .v'); if(slRow) slRow.innerHTML=_fmtPx(r.sl,k)+' · 1R = '+_fmtPx(risk,k);
+    var tpRow=document.querySelector('.sm-row[data-target-line="tp1"] .v'); if(tpRow) tpRow.textContent=_fmtPx(tp,k);
+    var cd=document.getElementById('smCountdown'); if(cd && r.tms){ var rem=Math.max(0,(r.tms+300000)-Date.now()); cd.textContent=('0'+Math.floor(rem/60000)).slice(-2)+':'+('0'+Math.floor((rem%60000)/1000)).slice(-2); }
+    var btn=document.getElementById('smBtn'); if(btn && !btn.classList.contains('executed')) btn.textContent='⚡ 立即執行小單 · '+k+' '+(isS?'做空':'做多');
+    var cl=document.getElementById('smCountLbl'); if(cl) cl.textContent=allGreen?'短窗中':'待觸發';
+  }
+  function paintSignalStream(scan){
+    var ul=document.getElementById('signalStream'); if(!ul) return;
+    var list=scan.slice().sort(function(a,b){return b.score-a.score;}).slice(0,8);
+    ul.innerHTML=list.map(function(r){
+      var isS=r.dir==='short', cls=r.score>=75?'high':(r.score>=65?'small':'skip');
+      var icon=r.score>=75?'🎯':(r.score>=65?'⚡':'⊘');
+      var arrow='<span style="color:var(--'+(isS?'red':'green')+')">'+(isS?'▼':'▲')+'</span>';
+      var bg=r.score>=75?(' style="border-color:var(--'+(isS?'red':'green')+'); background:rgba('+(isS?'248,81,73':'63,185,80')+',0.06)"'):'';
+      return '<li'+bg+'><span class="stime">'+_hhmm(r.tms)+'</span><span class="smodel">'+icon+' '+r.model+' '+arrow+' <span style="color:var(--text-dim);font-size:10px">'+r.sym+'</span></span><span class="sscore '+cls+'">'+r.score+'</span></li>';
+    }).join('');
+    var cont=ul.closest('div'); if(cont){ var cnt=cont.querySelector('.small-title .r'); if(cnt) cnt.textContent=list.length+' 筆 · 即時'; }
+  }
+  function refreshAdvisorSmall(){
+    if(typeof SYMS==='undefined'||typeof RANK_DB==='undefined') return;
+    var scan=[];
+    SYMS.forEach(function(s){ var r; try{ r=symbolResonance(s.k); }catch(_){ return; } if(r&&!r.none&&r.score!=null){ r.sym=s.k; scan.push(r); } });
+    // 真訊號寫回 RANK_DB → pickTopSignal / 執行鈕 讀到真的（顯示＝執行一致）
+    scan.forEach(function(r){
+      for(var i=1;i<=5;i++){ if(RANK_DB[i]&&RANK_DB[i].sym===r.sym){
+        var risk=Math.abs(r.entry-r.sl)||1, tp1=r.dir==='short'?(r.entry-risk):(r.entry+risk);
+        RANK_DB[i].advisor={ model:r.model, side:r.dir, score:r.score, chapters:r.ch, status:_advStatus(r), conditions:_advConds(r) };
+        RANK_DB[i].small={ model:r.model, modelFull:r.model+' 短倉', side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:tp1, tp2:tp1, tp3:tp1, chapters:r.ch, narrative:'5M 短倉 1R' };
+        break;
+      } }
+    });
+    if(!scan.length) return;
+    scan.sort(function(a,b){ return b.score-a.score; });
+    // 軍師卡 = 全市場最高分
+    var A=scan[0], isS=A.dir==='short';
+    var set=function(id,fn){ var el=document.getElementById(id); if(el) fn(el); };
+    set('advSym',function(e){ e.textContent=A.sym; });
+    set('advModel',function(e){ e.textContent=A.model; });
+    set('advSide',function(e){ e.textContent=isS?'空':'多'; e.className='side-tag '+A.dir; });
+    set('advScore',function(e){ e.innerHTML=A.score+'<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>'; e.className='adv-score '+(A.score>=75?'high':(A.score>=65?'mid':'low')); });
+    set('advRankBadge',function(e){ e.textContent='全市場最高分'; });
+    var conds=_advConds(A);
+    set('advConds',function(e){ e.innerHTML=conds.map(function(c){ return '<div class="'+(c.pass?'ok':'fail')+'">'+c.label+'</div>'; }).join(''); });
+    var st=_advStatus(A);
+    set('advAction',function(e){
+      if(st==='active'){ e.innerHTML='🟢 軍師訊號生效 · '+A.sym+' '+A.model+' · '+(isS?'做空':'做多')+' · '+A.score+' 分'; e.className='adv-action-text go'; }
+      else if(st==='pending'){ e.innerHTML='🟡 軍師待確認 · '+A.sym+' '+A.model+' · 掃蕩/MSS 未齊'; e.className='adv-action-text wait'; }
+      else { e.innerHTML='🔴 '+A.sym+' 位置未到 · 等回折扣/溢價再出手'; e.className='adv-action-text no'; }
+    });
+    // 小單區 = 市場最佳「小單級」(65–74)，無則取最高分
+    var small=null; for(var i=0;i<scan.length;i++){ if(scan[i].score>=65&&scan[i].score<75){ small=scan[i]; break; } }
+    if(!small) small=scan[0];
+    try{ paintSmallZone(small); }catch(_){}
+    try{ paintSignalStream(scan); }catch(_){}
+  }
+
+  function boot(){ try{ tagCardPrices(); }catch(_){}; try{ buildCalc(); }catch(e){ console.warn('[L1] calc',e); }; try{ wireTF(); }catch(_){} try{ connect(); }catch(e){ console.warn('[L1] ws',e); } try{ setInterval(function(){ try{ syncSymbol(); }catch(_){} try{ syncWarRoom(); }catch(_){} try{ renderRealChart(); }catch(_){} }, 1000); }catch(_){} try{ SYMS.forEach(function(s){ backfillCandles(s.k); }); }catch(_){} try{ refreshHTF(); }catch(_){} try{ setInterval(function(){ try{ refreshHTF(); }catch(_){} }, 60000); }catch(_){} try{ setInterval(function(){ try{ refreshRankCards(); }catch(_){} try{ refreshAdvisorSmall(); }catch(_){} }, 2000); }catch(_){} }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   console.log('%c[L1] OKX WS + 計算器 + Phase D 快照 已載入','color:#3fb950;font-weight:800');
 })();
