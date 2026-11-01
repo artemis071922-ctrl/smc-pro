@@ -3654,8 +3654,8 @@ function execHighTrade(source, rankNum) {
       $tier.dataset.origBg = $tier.style.background;
       $tier.dataset.origColor = $tier.style.color;
       $tier.textContent = '✅ 已執行 · 持倉';
-      $tier.style.background = 'rgba(63,185,80,0.25)';
-      $tier.style.color = 'var(--green)';
+      $tier.style.background = 'rgba(88,166,255,0.25)';
+      $tier.style.color = 'var(--cyan)';
     }
     document.querySelectorAll('.wd-cell.entry').forEach(c => c.classList.add('executed'));
     // 戰情室 wd-btn.execute 改文字
@@ -4027,8 +4027,8 @@ function applyExecutedVisuals() {
           $tier.dataset.origColor = $tier.style.color;
         }
         $tier.textContent = execLabel;
-        $tier.style.background = 'rgba(63,185,80,0.20)';
-        $tier.style.color = 'var(--green)';
+        $tier.style.background = 'rgba(88,166,255,0.20)';
+        $tier.style.color = 'var(--cyan)';
       }
       document.querySelectorAll('.wd-cell.entry').forEach(c => c.classList.add('executed'));
     } else {
