@@ -188,7 +188,7 @@ body {
   font-family: var(--font-mono); font-weight: 800; font-size: 11px;
   padding: 1px 5px; border-radius: 3px; letter-spacing: 0.3px;
 }
-.sym-score.s-high { background: rgba(255,80,80,0.16); color: #ff8a78; }
+.sym-score.s-high { background: rgba(240,185,11,0.16); color: #F0B90B; }
 .sym-score.s-mid { background: rgba(255,200,0,0.14); color: var(--amber); }
 .sym-score.s-low { background: rgba(120,120,120,0.20); color: var(--text-dim); }
 
@@ -319,6 +319,7 @@ body {
 .warroom > .wr-hero .wr-hero-title { font-size: 15px !important; line-height: 1.2; }
 .warroom > .wr-hero .wr-hero-sub { font-size: 11px !important; margin-top: 1px !important; }
 .warroom > .wr-hero .wr-score-num { font-size: 36px !important; line-height: 1; }
+.warroom > .wr-hero .wr-hero-dir { font-size: 22px !important; padding: 2px 12px !important; letter-spacing: 2px !important; }
 .warroom > .wr-fresh { padding: 4px 14px 6px !important; }
 .warroom > .wr-fresh .wr-fresh-meta { font-size: 11px !important; margin-bottom: 3px !important; }
 .warroom > .wr-decision { padding: 7px 12px 8px !important; gap: 5px !important; }
@@ -831,7 +832,7 @@ body {
 .rs-rank { font-size: 13px; font-weight: 700; color: var(--text-dim); flex-shrink: 0; }
 .rs-sym { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: 0.4px; flex-shrink: 0; }
 .rs-score { margin-left: auto; font-size: 22px; font-weight: 900; padding: 2px 9px; border-radius: 5px; line-height: 1.2; font-family: var(--font-mono); flex-shrink: 0; letter-spacing: -0.4px; }
-.rs-score.s-high { background: rgba(255,80,80,0.20); color: #ff6855; text-shadow: 0 0 8px rgba(255,80,80,0.50); }
+.rs-score.s-high { background: rgba(240,185,11,0.20); color: #F0B90B; text-shadow: 0 0 8px rgba(240,185,11,0.50); }
 .rs-score.s-mid  { background: rgba(255,200,0,0.16); color: var(--amber); text-shadow: 0 0 8px rgba(251,192,45,0.45); }
 .rs-score.s-low  { background: rgba(120,120,120,0.22); color: var(--text-dim); }
 .rs-mid { display: flex; justify-content: space-between; align-items: center; font-size: 11px; min-width: 0; gap: 4px; }
@@ -1081,7 +1082,7 @@ body {
   font-family: var(--font-mono); letter-spacing: -0.5px;
 }
 .wr-rank-of { color: var(--text-dim); font-size: 11px; }
-.wr-tier { background: rgba(63,185,80,0.18); color: var(--green); padding: 3px 9px; border-radius: 4px; font-weight: 700; }
+.wr-tier { background: rgba(240,185,11,0.18); color: #F0B90B; padding: 3px 9px; border-radius: 4px; font-weight: 700; }
 .wr-em { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
 .wr-stage { color: var(--text-dim); }
 .wr-stage b { color: var(--cyan); }
@@ -1106,11 +1107,19 @@ body {
 
 /* Hero 主標題 */
 .wr-hero {
-  display: grid; grid-template-columns: 70px 1fr 100px;
+  display: grid; grid-template-columns: 70px 1fr auto 100px;
   gap: 14px; align-items: center;
   padding: 14px 16px;
   background: var(--bg);
 }
+/* 戰情室方向大字（做空/做多）· 方向代幣：紅=空 綠=多 */
+.wr-hero-dir {
+  font-size: 28px; font-weight: 900; font-family: var(--font-tc);
+  letter-spacing: 3px; text-align: center; padding: 4px 16px; border-radius: 8px;
+  white-space: nowrap;
+}
+.wr-hero-dir.short { color: var(--red); background: rgba(248,81,73,0.10); border: 1px solid rgba(248,81,73,0.35); text-shadow: 0 0 10px rgba(248,81,73,0.4); }
+.wr-hero-dir.long  { color: var(--green); background: rgba(63,185,80,0.10); border: 1px solid rgba(63,185,80,0.35); text-shadow: 0 0 10px rgba(63,185,80,0.4); }
 .wr-hero-no {
   font-size: 50px; font-weight: 900; line-height: 0.95;
   font-family: var(--font-mono); text-align: center;
@@ -1747,7 +1756,7 @@ body {
 .adv-match-name .side-tag.short { background: rgba(248,81,73,0.2); color: var(--red); }
 .adv-match-name .side-tag.long { background: rgba(63,185,80,0.2); color: var(--green); }
 .adv-score { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
-.adv-score.high { color: var(--green); }
+.adv-score.high { color: #F0B90B; }
 .adv-score.mid { color: var(--amber); }
 .adv-score.low { color: var(--neutral); }
 .adv-conds { font-size: 12px; line-height: 1.7; }
@@ -2626,6 +2635,7 @@ body {
               </div>
               <div class="wr-hero-sub" id="wrSub">London Judas · 反向假突破 → 暴力反轉</div>
             </div>
+            <div class="wr-hero-dir short" id="wrHeroDir">做空</div>
             <div class="wr-hero-score">
               <div class="wr-score-num short" id="wrScore">78</div>
               <div class="wr-score-lbl">/100</div>
@@ -2805,7 +2815,7 @@ body {
               <span style="font-size:10px; font-weight:700; color:#1f6feb; background:rgba(31,111,235,0.13); padding:1.5px 5px; border-radius:6px; letter-spacing:0.3px; margin-left:4px; border:1px solid rgba(31,111,235,0.35)">全市場最強</span>
             </div>
             <!-- v0.26.1 分數移到右上（與高勝率卡視覺一致化）-->
-            <div class="adv-score high" id="advScore" style="margin-left:auto; font-size:22px; padding:2px 10px; background:rgba(63,185,80,0.15); border:1px solid rgba(63,185,80,0.4); border-radius:6px;">73<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span></div>
+            <div class="adv-score high" id="advScore" style="margin-left:auto; font-size:22px; padding:2px 10px; background:rgba(240,185,11,0.15); border:1px solid rgba(240,185,11,0.4); border-radius:6px;">73<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span></div>
             <div class="adv-clock" id="advClock">
               <span class="lbl">發生</span><span class="time" id="advTime">15:15</span>
               <span class="lbl">·</span><span class="elapsed" id="advElapsed">+00:00</span>
@@ -3179,6 +3189,7 @@ function triggerSignal(model, side, score) {
   const $wrMode = document.getElementById('wrMode'); if ($wrMode) $wrMode.textContent = SIG.mode === 'high' ? '高勝率 5:00' : '小單 2:00';
   const $wrScore = document.getElementById('wrScore');
   if ($wrScore) { $wrScore.textContent = score; $wrScore.className = 'wr-score-num ' + side; }
+  setHeroDir(side);
   const $wrArrow = document.getElementById('wrArrow');
   if ($wrArrow) { $wrArrow.textContent = sideArrow; $wrArrow.className = 'wr-arrow ' + side; }
   const $wrName = document.getElementById('wrName'); if ($wrName) $wrName.textContent = modelLbl.replace(/^[①-⑳]\s?/,'');
@@ -5498,6 +5509,7 @@ function promoteRank(n) {
       if ($wrArrow) { $wrArrow.textContent = sideArrow; $wrArrow.className = 'wr-arrow ' + a.side; }
       const $wrScore = document.getElementById('wrScore');
       if ($wrScore) { $wrScore.textContent = a.score; $wrScore.className = 'wr-score-num ' + a.side; }
+      setHeroDir(a.side);
       const $wrSub = document.getElementById('wrSub');
       if ($wrSub) $wrSub.textContent = '🧠 軍師視角 · ' + a.model + (a.chapters ? ' · ' + a.chapters : '');
       const $heroNo = document.querySelector('.wr-hero-no');
@@ -5525,6 +5537,7 @@ function promoteRank(n) {
       if ($wrArrow) { $wrArrow.textContent = sideArrow; $wrArrow.className = 'wr-arrow ' + s.side; }
       const $wrScore = document.getElementById('wrScore');
       if ($wrScore) { $wrScore.textContent = s.score; $wrScore.className = 'wr-score-num ' + s.side; }
+      setHeroDir(s.side);
       const $wrSub = document.getElementById('wrSub');
       if ($wrSub) $wrSub.textContent = '⚡ 小單視角 · ' + (s.modelFull || s.model) + (s.narrative ? ' · ' + s.narrative : '');
       const $heroNo = document.querySelector('.wr-hero-no');
@@ -5581,6 +5594,7 @@ function promoteRank(n) {
   if ($wrArrow) { $wrArrow.textContent = sideArrow; $wrArrow.className = 'wr-arrow ' + d.side; }
   const $wrScore = document.getElementById('wrScore');
   if ($wrScore) { $wrScore.textContent = d.score; $wrScore.className = 'wr-score-num ' + d.side; }
+  setHeroDir(d.side);
   const $wrSub = document.getElementById('wrSub');
   if ($wrSub) $wrSub.textContent = d.modelFull + ' · ' + d.narrative;
 
@@ -5589,7 +5603,7 @@ function promoteRank(n) {
   if ($rank) $rank.textContent = '#' + n;
   const $tier = document.querySelector('.wr-tier');
   if ($tier) {
-    if (d.score >= 75) { $tier.textContent = '🎯 高勝率'; $tier.style.background = 'rgba(63,185,80,0.18)'; $tier.style.color = 'var(--green)'; }
+    if (d.score >= 75) { $tier.textContent = '🎯 高勝率'; $tier.style.background = 'rgba(240,185,11,0.18)'; $tier.style.color = '#F0B90B'; }
     else if (d.score >= 65) { $tier.textContent = '⚡ 小單'; $tier.style.background = 'rgba(251,192,45,0.18)'; $tier.style.color = 'var(--amber)'; }
     else { $tier.textContent = '⊘ 監測'; $tier.style.background = 'var(--bg-3)'; $tier.style.color = 'var(--text-dim)'; }
   }
@@ -5752,6 +5766,9 @@ function promoteRank(n) {
   // 在此統一呼叫覆寫，讓戰情室 hero 反映實際執行的訊號源（軍師 Judas 73 / 小單 71）★★★
   applyAdvisorWarroomOverride();
 }
+
+// 戰情室方向大字（做空/做多）· 頂層函式，跟 hero 方向同步（紅=空 綠=多）
+function setHeroDir(sd){ var e=document.getElementById('wrHeroDir'); if(e){ e.textContent=(sd==='long'?'做多':'做空'); e.className='wr-hero-dir '+(sd==='long'?'long':'short'); } }
 
 // ===== v0.16 整合排位賽 + 多掃 → 戰情室連接 =====
 function connectRank(n) {
