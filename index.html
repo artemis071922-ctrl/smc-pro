@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.29.3 · 吃圖卡 庫4 諧波 偵測上線</span></div>
+    <div class="logo">smc-pro<span class="v">v0.30.0 · 四庫即時偵測全到齊🎉</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7356,6 +7356,33 @@ injectICTFlagshipGrid();
     return out;
   }
 
+  // 吃圖卡 · 庫3 趨勢線20：照卡的 mechanical_rule（slope/connect）做線性擬合偵測
+  function detectTrendline(cs){
+    var out=[], N=cs?cs.length:0; if(N<15) return out;
+    var pv=swingPivots(cs,3,3), H=pv.H, L=pv.L, px=cs[N-1].c;
+    var hi=Math.max.apply(null,cs.map(function(c){return c.h;})), lo=Math.min.apply(null,cs.map(function(c){return c.l;}));
+    var rangeP=(hi-lo)||1, tol=rangeP*0.015;
+    function fit(pts){ if(!pts||pts.length<2) return null; var n=pts.length,sx=0,sy=0,sxx=0,sxy=0;
+      pts.forEach(function(p){ sx+=p.i; sy+=p.p; sxx+=p.i*p.i; sxy+=p.i*p.p; });
+      var dn=n*sxx-sx*sx; if(dn===0) return null; var m=(n*sxy-sx*sy)/dn, b=(sy-m*sx)/n;
+      return {m:m, at:function(i){ return m*i+b; }}; }
+    var fl=fit(L.slice(-3)), fh=fit(H.slice(-3));
+    // TL1 上升趨勢線（連低點·正斜率·現價在線上/附近）
+    if(fl && fl.m>0){ var lnL=fl.at(N-1); if(px>=lnL-tol*1.5) out.push({num:'TL1',name:'上升趨勢線',dir:'long',note:'連'+Math.min(3,L.length)+'低點·動態支撐'}); }
+    // TL2 下降趨勢線（連高點·負斜率·現價在線下/附近）
+    if(fh && fh.m<0){ var lnH=fh.at(N-1); if(px<=lnH+tol*1.5) out.push({num:'TL2',name:'下降趨勢線',dir:'short',note:'連'+Math.min(3,H.length)+'高點·動態壓力'}); }
+    // TL3 水平 S/R（≥3 個樞紐聚在相近價位）
+    var allP=H.concat(L).map(function(p){return p.p;});
+    for(var i=0;i<allP.length;i++){ var cnt=0; for(var j=0;j<allP.length;j++){ if(Math.abs(allP[i]-allP[j])<=tol) cnt++; }
+      if(cnt>=3){ out.push({num:'TL3',name:'水平 S/R 線',dir:'neutral',note:'≈'+Math.round(allP[i])+'·多次觸碰'}); break; } }
+    // TL4 平行通道（上下軌同向且斜率相近）
+    if(fl && fh && fl.m*fh.m>0 && Math.abs(fl.m-fh.m)<=(Math.abs(fl.m)+Math.abs(fh.m))*0.35)
+      out.push({num:'TL4',name:'平行通道',dir:fl.m>0?'long':'short',note:(fl.m>0?'上升':'下降')+'通道·上沽下買'});
+    // TL12 對稱三角（高點降+低點升=收斂）
+    if(fh && fl && fh.m<0 && fl.m>0) out.push({num:'TL12',name:'對稱三角',dir:'neutral',note:'收斂·等突破方向'});
+    return out;
+  }
+
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7391,17 +7418,18 @@ injectICTFlagshipGrid();
         +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
         +'</div>';
     }
-    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), mh='';
+    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs), mh='';
     function cardRow(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
       return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:30px;font-size:10px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'空▼':(m.dir==='long'?'多▲':'◆'))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; }
-    var libsFired=(ict.length?1:0)+(kb.length?1:0)+(hm.length?1:0);  // 共振：庫1 ICT + 庫2 K線 + 庫4 諧波（庫3 趨勢線建置中）
+    var libsFired=(ict.length?1:0)+(kb.length?1:0)+(hm.length?1:0)+(tl.length?1:0);  // 共振：四庫到齊 ICT+K線+諧波+趨勢線
     mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">';
     mh+='<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">🃏 四庫偵測 <span style="color:#58A6FF;font-weight:700;font-size:10px;background:rgba(88,166,255,.12);padding:1px 6px;border-radius:4px">共振 '+libsFired+'/4 庫</span></div>';
     if(ict.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:3px 0 1px;letter-spacing:.5px">庫1 ICT</div>'; ict.forEach(function(m){ mh+=cardRow(m); }); }
     if(kb.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫2 K線</div>'; kb.forEach(function(m){ mh+=cardRow(m); }); }
+    if(tl.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫3 趨勢線</div>'; tl.forEach(function(m){ mh+=cardRow(m); }); }
     if(hm.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫4 諧波</div>'; hm.forEach(function(m){ mh+=cardRow(m); }); }
-    if(!ict.length && !kb.length && !hm.length) mh+='<div style="color:#6e7681;padding:2px 0">暫無明確型態</div>';
-    mh+='<div style="font-size:9px;color:#4a515c;margin-top:5px">庫3 趨勢線：即時偵測建置中（Track B 最後一庫）</div>';
+    if(!ict.length && !kb.length && !hm.length && !tl.length) mh+='<div style="color:#6e7681;padding:2px 0">暫無明確型態</div>';
+    mh+='<div style="font-size:9px;color:#3fb950;margin-top:5px">✓ 四庫即時偵測全到齊（ICT · K線 · 趨勢線 · 諧波）</div>';
     mh+='</div>';
     body.innerHTML=base+mh+ph;
   }
