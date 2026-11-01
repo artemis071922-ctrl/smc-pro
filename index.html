@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.30.0 · 四庫即時偵測全到齊🎉</span></div>
+    <div class="logo">smc-pro<span class="v">v0.31.0 · 共振分數引擎+4燈上線</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7383,6 +7383,30 @@ injectICTFlagshipGrid();
     return out;
   }
 
+  // 共振分數引擎：ICT 為 gate(base50+觸發品質)，K線/諧波/趨勢線同向加分、反向扣分（詳見專案文件「四庫共振驅動-規劃」）
+  function libAgree(arr, dir){ var agree=false, conflict=false;
+    (arr||[]).forEach(function(m){ if(m.dir===dir) agree=true; else if(m.dir==='long'||m.dir==='short') conflict=true; });
+    return {agree:agree, conflict:conflict}; }
+  function computeResonance(prop, lv, ict, kb, hm, tl, inKz){
+    if(!prop || prop.none) return null;
+    var dir=prop.dir, s=50, brk=[];
+    if(lv&&lv.sweep&&lv.sweep.dir===dir){ s+=8; brk.push('掃+8'); }
+    if(lv&&lv.mss){ var mdn=lv.mss.type.indexOf('↓')>=0, mup=lv.mss.type.indexOf('↑')>=0; if((dir==='short'&&mdn)||(dir==='long'&&mup)){ s+=10; brk.push('MSS+10'); } }
+    if(lv&&lv.fvg&&lv.fvg.dir===dir){ s+=6; brk.push('FVG+6'); }
+    var ic=libAgree(ict,dir), k=libAgree(kb,dir), h=libAgree(hm,dir), t=libAgree(tl,dir);
+    if(k.agree){ s+=12; brk.push('K線+12'); }
+    if(h.agree){ s+=16; brk.push('諧波+16'); }
+    if(t.agree){ s+=10; brk.push('趨勢線+10'); }
+    if(inKz){ s+=4; brk.push('KZ+4'); }
+    var conf=(k.conflict?1:0)+(h.conflict?1:0)+(t.conflict?1:0);
+    if(conf){ s-=8*conf; brk.push('反向-'+(8*conf)); }
+    s=Math.max(0,Math.min(100,Math.round(s)));
+    function lamp(x){ return x.agree?'agree':(x.conflict?'conflict':'silent'); }
+    var lights={ict:lamp(ic),kbar:lamp(k),trend:lamp(t),harm:lamp(h)};
+    var fired=[ic,k,t,h].filter(function(x){return x.agree;}).length;
+    return {score:s, tier:(s>=75?'high':(s>=65?'small':'watch')), lights:lights, fired:fired, brk:brk, dir:dir};
+  }
+
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7395,6 +7419,8 @@ injectICTFlagshipGrid();
     function row(l,v){ return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#8b949e">'+l+'</span>'+v+'</div>'; }
     var base=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
     var lv=detectLevels(cs,d); var prop=proposeSetup(d,lv); lastProposal=prop;
+    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
+    var reso=computeResonance(prop,lv,ict,kb,hm,tl,kzActive()); window.lastResonance=reso;
     var ph='';
     if(!prop || prop.none){ ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#8b949e">💡 提議：<b style="color:#d29922">'+((prop&&prop.reason)||'等結構明朗')+'</b>（無明確 setup，不給假價）</div>'; }
     else {
@@ -7410,6 +7436,11 @@ injectICTFlagshipGrid();
       ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">'
         +'<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">💡 提議 setup <span style="color:#6e7681;font-weight:600">· v1 近似，對照 TV 再下</span></div>'
         +stBox
+        +(reso?('<div style="margin:2px 0 7px;padding:7px 9px;border-radius:6px;background:'+(reso.tier==='high'?'rgba(240,185,11,.12)':(reso.tier==='small'?'rgba(210,153,34,.10)':'rgba(110,118,129,.12)'))+';border:1px solid '+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#6e7681'))+'">'
+          +'<div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;font-family:monospace;color:'+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#8b949e'))+'">共振 '+reso.score+'</b><span style="font-size:10px;color:#8b949e">'+(reso.tier==='high'?'🎯 高勝率':(reso.tier==='small'?'⚡ 小單':'⊘ 監測'))+' · '+reso.fired+'/4 庫同向</span></div>'
+          +'<div style="display:flex;gap:11px;margin-top:4px;font-size:10px">'+['ict','kbar','trend','harm'].map(function(x){var lbl={ict:'ICT',kbar:'K線',trend:'趨勢',harm:'諧波'}[x];var st=reso.lights[x];var col=st==='agree'?'#3fb950':(st==='conflict'?'#f85149':'#4a515c');var dot=st==='agree'?'●':(st==='conflict'?'✕':'○');return '<span style="color:'+col+'">'+dot+' '+lbl+'</span>';}).join('')+'</div>'
+          +'<div style="font-size:9px;color:#6e7681;font-family:monospace;margin-top:3px">'+reso.brk.join(' ')+'</div>'
+          +'</div>'):'')
         +row('方向','<b>'+dirTxt+'</b>')
         +row('進場 <span style="color:#58A6FF">'+(prop.enSrc||'OTE')+'</span>','<b style="font-family:monospace;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</b>')
         +row('止損 <span style="color:#58A6FF">'+(prop.slSrc||'擺動外')+'</span>','<b style="font-family:monospace;color:#f85149">'+fmtPx(prop.sl,dp)+'</b>')
@@ -7418,7 +7449,7 @@ injectICTFlagshipGrid();
         +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
         +'</div>';
     }
-    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs), mh='';
+    var mh='';
     function cardRow(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
       return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:30px;font-size:10px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'空▼':(m.dir==='long'?'多▲':'◆'))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; }
     var libsFired=(ict.length?1:0)+(kb.length?1:0)+(hm.length?1:0)+(tl.length?1:0);  // 共振：四庫到齊 ICT+K線+諧波+趨勢線
