@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.31.0 · 共振分數引擎+4燈上線</span></div>
+    <div class="logo">smc-pro<span class="v">v0.32.0 · S1 Phase D 來源章 上線</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7421,6 +7421,7 @@ injectICTFlagshipGrid();
     var lv=detectLevels(cs,d); var prop=proposeSetup(d,lv); lastProposal=prop;
     var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
     var reso=computeResonance(prop,lv,ict,kb,hm,tl,kzActive()); window.lastResonance=reso;
+    window.lastDetect={sym:curSym(), lv:lv, prop:prop, reso:reso, ict:ict, kb:kb, hm:hm, tl:tl};
     var ph='';
     if(!prop || prop.none){ ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#8b949e">💡 提議：<b style="color:#d29922">'+((prop&&prop.reason)||'等結構明朗')+'</b>（無明確 setup，不給假價）</div>'; }
     else {
@@ -7552,24 +7553,34 @@ injectICTFlagshipGrid();
     if(c.rr==null||c.rr<2){ go=confirm('⚠ R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' < 2:1，未達鐵律門檻。仍要建檔嗎？'); }
     if(!go) return;
     var now=new Date();
+    // S1 來源章：抓當下四庫偵測/共振（符合建檔標的才採用）
+    var det=(window.lastDetect && window.lastDetect.sym===c.k)?window.lastDetect:null;
+    var R=det&&det.reso, P=det&&det.prop;
+    var srcMode=(P&&((P.slSrc&&P.slSrc.indexOf('⑤')>=0)||(P.enSrc&&P.enSrc.indexOf('⑬')>=0)))?'card':(P?'geometry':null);
+    var allCards=det?[].concat(det.ict||[],det.kb||[],det.hm||[],det.tl||[]).map(function(m){return m.num;}).join(','):null;
     var rec={
       log_id:'man_'+now.getTime()+'_'+Math.floor(Math.random()*9999),
       timestamp:now.toISOString(), version:'L1', kind:'manual',
       symbol:c.k, side:c.dir, model:null,
-      score:null, score_tier:null, score_source:'manual',
+      score:R?R.score:null, score_tier:R?R.tier:null, score_source:R?'resonance':'manual',
       c1_kz:insideKz, c2_htf:leds[1]!=null?leds[1]:null, c3_zone:leds[2]!=null?leds[2]:null,
-      c4_score_pass:null, c5_ob:leds[4]!=null?leds[4]:null, c6_sl_ob:leds[5]!=null?leds[5]:null,
+      c4_score_pass:R?(R.score>=75):null, c5_ob:leds[4]!=null?leds[4]:null, c6_sl_ob:leds[5]!=null?leds[5]:null,
       c7_rr:c.rr!=null?(c.rr>=2):null, seven_pass_count:leds.filter(Boolean).length,
-      ob_fvg_stack:null, mss:null, sweep:null, kz_session:kzNow, volatility_state:null,
-      harmonic_match:null, harmonic_type:null, harmonic_prz_touch:null,
-      kline_pattern:null, kline_direction:null, kline_confirmation:null,
+      ob_fvg_stack:(det&&det.lv&&det.lv.fvg)?det.lv.fvg.dir:null, mss:(det&&det.lv&&det.lv.mss)?det.lv.mss.type:null, sweep:(det&&det.lv&&det.lv.sweep)?det.lv.sweep.dir:null, kz_session:kzNow, volatility_state:null,
+      harmonic_match:(det&&det.hm&&det.hm.length)?true:null, harmonic_type:(det&&det.hm&&det.hm.length)?det.hm.map(function(m){return m.name;}).join(','):null, harmonic_prz_touch:null,
+      kline_pattern:(det&&det.kb&&det.kb.length)?det.kb.map(function(m){return m.num;}).join(','):null, kline_direction:(det&&det.kb&&det.kb.length)?det.kb[0].dir:null, kline_confirmation:null,
       entry_price:c.entry, sl_price:c.sl, tp1_price:c.tp, rr_ratio:c.rr!=null?Math.round(c.rr*100)/100:null,
       pine_triggered:false, manual_verified:true,
       outcome:null, fail_category:null, exit_reason:null,
-      live_px_at_snapshot:c.live
+      live_px_at_snapshot:c.live,
+      // ───── 來源章（S1·回測燃料）─────
+      resonance_score:R?R.score:null, resonance_tier:R?R.tier:null, resonance_fired:R?R.fired:null,
+      resonance_lights:R?JSON.stringify(R.lights):null, resonance_breakdown:R?R.brk.join(' '):null,
+      signal_source:srcMode, sl_source:P?P.slSrc:null, entry_source:P?P.enSrc:null,
+      cards_detected:allCards
     };
     var log=readLog(); log.push(rec); writeLog(log);
-    toast('📸 已建檔 · '+c.k+' '+(c.dir==='short'?'做空':(c.dir==='long'?'做多':''))+' · R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' · 共 '+log.length+' 筆','normal');
+    toast('📸 已建檔 · '+c.k+' '+(c.dir==='short'?'做空':(c.dir==='long'?'做多':''))+(R?' · 共振'+R.score+'('+R.fired+'/4)':'')+(srcMode?' · '+(srcMode==='card'?'吃卡':'幾何'):'')+' · R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' · 共 '+log.length+' 筆','normal');
     var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=log.length+' 筆';
   }
   function exportCsv(){
