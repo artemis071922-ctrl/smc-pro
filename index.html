@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.36.0 · OKX唯讀自動記錄骨架(API設定+抓成交+寫DB)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.37.0 · OKX自動記錄+模擬盤支援(x-simulated-trading)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7736,9 +7736,9 @@ injectICTFlagshipGrid();
     var c=okxCfg(); if(!c.key||!c.secret||!c.pass) throw new Error('未設定 key');
     var ts=new Date().toISOString();
     var sign=await okxSign(c.secret, ts, 'GET', path, '');
-    var r=await fetch(okxBase(c)+path, {method:'GET', headers:{
-      'OK-ACCESS-KEY':c.key, 'OK-ACCESS-SIGN':sign, 'OK-ACCESS-TIMESTAMP':ts, 'OK-ACCESS-PASSPHRASE':c.pass, 'Content-Type':'application/json'
-    }});
+    var hdr={ 'OK-ACCESS-KEY':c.key, 'OK-ACCESS-SIGN':sign, 'OK-ACCESS-TIMESTAMP':ts, 'OK-ACCESS-PASSPHRASE':c.pass, 'Content-Type':'application/json' };
+    if(c.demo) hdr['x-simulated-trading']='1';   // 模擬盤
+    var r=await fetch(okxBase(c)+path, {method:'GET', headers:hdr});
     var j; try{ j=await r.json(); }catch(e){ throw new Error('HTTP '+r.status+' 非 JSON 回應'); }
     if(j.code && j.code!=='0') throw new Error('OKX '+j.code+' '+(j.msg||''));
     return j.data||[];
@@ -7750,7 +7750,7 @@ injectICTFlagshipGrid();
     try{
       var d=await okxGet('/api/v5/account/config');
       var a=(d&&d[0])||{};
-      okxSetStatus('✅ 連線成功 · acctLv '+(a.acctLv||'?')+' · posMode '+(a.posMode||'?')+'<br>key 有效、CORS 通。可以啟用自動記錄。');
+      okxSetStatus('✅ 連線成功 '+(okxCfg().demo?'<b style="color:#d29922">[模擬盤]</b>':'[實盤]')+' · acctLv '+(a.acctLv||'?')+' · posMode '+(a.posMode||'?')+'<br>key 有效、CORS 通。可以啟用自動記錄。');
       okxSetState('已驗證','on');
     }catch(e){
       var m=String(e&&e.message||e);
@@ -7787,7 +7787,7 @@ injectICTFlagshipGrid();
       added++;
     });
     if(added){ writeLog(log); okxMarkSeen(seen); var cnt=document.getElementById('l1count'); if(cnt) cnt.textContent=readLog().length+' 筆'; }
-    okxSetStatus('🟢 自動記錄中 · 最後抓取 '+_hhmm(Date.now())+' · 本次新增 '+added+' 筆 · DB 共 '+readLog().length+' 筆<br><span style="color:#6e7681">※ 開/平倉配對算真 R:R＝下一步</span>');
+    okxSetStatus('🟢 自動記錄中 '+(c.demo?'<b style="color:#d29922">[模擬盤]</b>':'[實盤]')+' · 最後抓取 '+_hhmm(Date.now())+' · 本次新增 '+added+' 筆 · DB 共 '+readLog().length+' 筆<br><span style="color:#6e7681">※ 開/平倉配對算真 R:R＝下一步</span>');
     okxSetState('記錄中','on');
   }
   function okxStartTimer(){ okxStopTimer(); okxTimer=setInterval(function(){ try{ okxPollFills(); }catch(_){} }, 30000); }
@@ -7807,10 +7807,11 @@ injectICTFlagshipGrid();
     if(s&&s.value.trim()) c.secret=s.value.trim();
     if(p&&p.value.trim()) c.pass=p.value.trim();
     c.proxy=px?px.value.trim():'';
+    var dm=document.getElementById('okxDemo'); c.demo=!!(dm&&dm.checked);
     okxSaveCfg(c);
     if(s){ s.value=''; s.placeholder='已儲存 ••••'; }
     if(p){ p.value=''; p.placeholder='已儲存 ••••'; }
-    okxSetStatus('💾 已儲存（只存本機）· 按「測試連線」確認 key＋CORS');
+    okxSetStatus('💾 已儲存（只存本機）'+(c.demo?' · <b style="color:#d29922">模擬盤模式</b>':' · 實盤模式')+'· 按「測試連線」確認 key＋CORS');
     okxSetState(c.key?'已設定':'未啟用','');
   }
   function okxInitUI(){
@@ -7819,6 +7820,7 @@ injectICTFlagshipGrid();
     var px=document.getElementById('okxProxy'); if(px&&c.proxy) px.value=c.proxy;
     var s=document.getElementById('okxSecret'); if(s&&c.secret) s.placeholder='已儲存 ••••';
     var p=document.getElementById('okxPass'); if(p&&c.pass) p.placeholder='已儲存 ••••';
+    var dm=document.getElementById('okxDemo'); if(dm) dm.checked=!!c.demo;
     var btn=document.getElementById('okxToggleBtn');
     if(c.enabled){ if(btn) btn.textContent='⏸ 停用自動記錄'; okxSetState('記錄中','on'); okxStartTimer(); okxPollFills(); }
     else if(c.key){ okxSetState('已設定',''); okxSetStatus('已設定 · 未啟用。按「測試連線」或「啟用自動記錄」'); }
@@ -7873,6 +7875,7 @@ injectICTFlagshipGrid();
           +'<div class="l1-field"><label>Secret Key</label><input id="okxSecret" type="password" autocomplete="off" placeholder="secret"></div>'
           +'<div class="l1-field"><label>Passphrase</label><input id="okxPass" type="password" autocomplete="off" placeholder="passphrase"></div>'
           +'<div class="l1-field"><label>Proxy（選填·CORS 被擋才填）</label><input id="okxProxy" type="text" autocomplete="off" spellcheck="false" placeholder="https://你的-worker.workers.dev"></div>'
+          +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8b949e;margin-top:6px;cursor:pointer"><input type="checkbox" id="okxDemo" style="width:auto;margin:0;flex:none"> 模擬盤 demo（用 OKX 模擬交易的 key）</label>'
           +'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
             +'<button class="l1-btn exp" id="okxSaveBtn">💾 儲存</button>'
             +'<button class="l1-btn exp" id="okxTestBtn">🔌 測試連線</button>'
