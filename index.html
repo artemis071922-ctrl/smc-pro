@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.29.2 · 吃圖卡 庫2 K線26 偵測上線</span></div>
+    <div class="logo">smc-pro<span class="v">v0.29.3 · 吃圖卡 庫4 諧波 偵測上線</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7329,6 +7329,33 @@ injectICTFlagshipGrid();
     return out;
   }
 
+  // 吃圖卡 · 庫4 諧波20：直接讀圖鑑 HARMONIC_PATTERNS 的 detect 比例範圍來比對 XABCD
+  function detectHarmonic(cs){
+    var out=[]; if(!cs||cs.length<20) return out;
+    var HP; try{ HP=(typeof HARMONIC_PATTERNS!=='undefined')?HARMONIC_PATTERNS:(window.HARMONIC_PATTERNS||null); }catch(_){ HP=null; }
+    if(!HP) return out;
+    var pv=swingPivots(cs,3,3), piv=[];
+    pv.H.forEach(function(h){ piv.push({i:h.i,p:h.p,t:'H'}); });
+    pv.L.forEach(function(l){ piv.push({i:l.i,p:l.p,t:'L'}); });
+    piv.sort(function(a,b){ return a.i-b.i; });
+    var seq=[]; // 交替高低，連續同型取更極端
+    piv.forEach(function(p){ var last=seq[seq.length-1];
+      if(last && last.t===p.t){ if((p.t==='H'&&p.p>last.p)||(p.t==='L'&&p.p<last.p)) seq[seq.length-1]=p; }
+      else seq.push(p); });
+    if(seq.length<5) return out;
+    var X=seq[seq.length-5],A=seq[seq.length-4],B=seq[seq.length-3],C=seq[seq.length-2],D=seq[seq.length-1];
+    var XA=Math.abs(A.p-X.p), AB=Math.abs(B.p-A.p), BC=Math.abs(C.p-B.p), CD=Math.abs(D.p-C.p), AD=Math.abs(D.p-A.p);
+    if(XA<=0||AB<=0||BC<=0) return out;
+    var rAB=AB/XA, rBC=BC/AB, rCD=CD/BC, rAD=AD/XA;
+    var dir = D.t==='L' ? 'long' : 'short';   // 諧波完成在低點→做多，高點→做空
+    for(var key in HP){ var h=HP[key], d=h&&h.detect; if(!d||!d.ab||!d.bc||!d.cd||!d.ad) continue;
+      if(rAB>=d.ab[0]&&rAB<=d.ab[1] && rBC>=d.bc[0]&&rBC<=d.bc[1] && rCD>=d.cd[0]&&rCD<=d.cd[1] && rAD>=d.ad[0]&&rAD<=d.ad[1]){
+        out.push({num:(h.code?'H'+h.code:'H'),name:key.replace(/^[①-⑳]\s?/,''),dir:dir,note:(h.prz||'')+' · AD/XA '+rAD.toFixed(2)});
+      }
+    }
+    return out;
+  }
+
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
     var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
@@ -7364,16 +7391,17 @@ injectICTFlagshipGrid();
         +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
         +'</div>';
     }
-    var ict=detectICTModels(cs), kb=detectKbars(cs), mh='';
+    var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), mh='';
     function cardRow(m){ var col=m.dir==='short'?'#f85149':(m.dir==='long'?'#3fb950':'#8b949e');
       return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="font-weight:800;color:'+col+';min-width:30px;font-size:10px">'+m.num+'</span><b style="color:#e6edf3">'+m.name+'</b><span style="color:'+col+';font-size:10px">'+(m.dir==='short'?'空▼':(m.dir==='long'?'多▲':'◆'))+'</span><span style="margin-left:auto;color:#8b949e;font-size:10px;font-family:monospace">'+m.note+'</span></div>'; }
-    var libsFired=(ict.length?1:0)+(kb.length?1:0);  // 共振：目前庫1 ICT + 庫2 K線（庫3/4 建置中）
+    var libsFired=(ict.length?1:0)+(kb.length?1:0)+(hm.length?1:0);  // 共振：庫1 ICT + 庫2 K線 + 庫4 諧波（庫3 趨勢線建置中）
     mh='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">';
     mh+='<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">🃏 四庫偵測 <span style="color:#58A6FF;font-weight:700;font-size:10px;background:rgba(88,166,255,.12);padding:1px 6px;border-radius:4px">共振 '+libsFired+'/4 庫</span></div>';
     if(ict.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:3px 0 1px;letter-spacing:.5px">庫1 ICT</div>'; ict.forEach(function(m){ mh+=cardRow(m); }); }
     if(kb.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫2 K線</div>'; kb.forEach(function(m){ mh+=cardRow(m); }); }
-    if(!ict.length && !kb.length) mh+='<div style="color:#6e7681;padding:2px 0">暫無明確型態</div>';
-    mh+='<div style="font-size:9px;color:#4a515c;margin-top:5px">庫3 趨勢線 · 庫4 諧波：即時偵測建置中（Track B）</div>';
+    if(hm.length){ mh+='<div style="font-size:9px;color:#6e7681;margin:4px 0 1px;letter-spacing:.5px">庫4 諧波</div>'; hm.forEach(function(m){ mh+=cardRow(m); }); }
+    if(!ict.length && !kb.length && !hm.length) mh+='<div style="color:#6e7681;padding:2px 0">暫無明確型態</div>';
+    mh+='<div style="font-size:9px;color:#4a515c;margin-top:5px">庫3 趨勢線：即時偵測建置中（Track B 最後一庫）</div>';
     mh+='</div>';
     body.innerHTML=base+mh+ph;
   }
