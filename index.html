@@ -933,14 +933,34 @@ body {
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .spacer { flex: 1; }
+/* ══ 設計系統 · 立體按鈕語言（Wave 3）══ 漸層深度 + 頂部高光 + 投影 + 觸感 */
 .btn {
-  background: var(--bg-3); border: 1px solid var(--border); color: var(--text);
-  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: var(--font-tc);
+  background: linear-gradient(180deg, var(--bg-4), var(--bg-3));
+  border: 1px solid var(--border-2); color: var(--text);
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  font-family: var(--font-tc);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
 }
-.btn:active { transform: scale(0.96); }
-.btn.primary { background: var(--cyan); color: #000; font-weight: 700; }
-.btn.danger { background: var(--red); color: #fff; }
-.btn.small-trade { background: var(--amber); color: #000; font-weight: 700; }
+.btn:hover { border-color: var(--cyan); box-shadow: 0 3px 10px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.13); }
+.btn.primary { background: linear-gradient(180deg, #74b9ff, var(--cyan)); color: #04101f; font-weight: 800; box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 12px rgba(88,166,255,0.35), inset 0 1px 0 rgba(255,255,255,0.45); }
+.btn.danger { background: linear-gradient(180deg, #ff6b63, var(--red)); color: #fff; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 12px rgba(248,81,73,0.35), inset 0 1px 0 rgba(255,255,255,0.28); }
+.btn.small-trade { background: linear-gradient(180deg, #ecc04a, var(--amber)); color: #1a1200; font-weight: 800; box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 12px rgba(240,185,11,0.30), inset 0 1px 0 rgba(255,255,255,0.35); }
+
+/* ══ 全站按鈕觸感：hover 提亮上浮 · active 按下 ══ 明暗度變化 + 視覺引導 */
+.btn, .rs-exec, .l1-btn, .wd-btn, .card-execute-btn, .smentry-btn,
+.short-btn, .long-btn, .alert-btn, .recap-fill-btn, .harm-val-btn, .tf, .wr-fullscreen-btn {
+  transition: transform .12s ease, filter .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.btn:hover, .rs-exec:hover, .l1-btn:hover, .wd-btn:hover, .card-execute-btn:hover,
+.smentry-btn:hover, .short-btn:hover, .long-btn:hover, .alert-btn:hover,
+.recap-fill-btn:hover, .harm-val-btn:hover, .tf:hover, .wr-fullscreen-btn:hover {
+  filter: brightness(1.14) saturate(1.04);
+}
+.btn:active, .rs-exec:active, .l1-btn:active, .wd-btn:active, .card-execute-btn:active,
+.smentry-btn:active, .short-btn:active, .long-btn:active, .alert-btn:active,
+.recap-fill-btn:active, .harm-val-btn:active, .tf:active, .wr-fullscreen-btn:active {
+  transform: translateY(1px) scale(0.99); filter: brightness(0.93);
+}
 
 /* ===== 共用 ===== */
 .section-title {
