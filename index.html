@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.33.0 · 回測引擎上線(吃卡vs幾何勝率)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.33.1 · 共振卡加進場/停損/止盈價位</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7440,7 +7440,12 @@ injectICTFlagshipGrid();
         +(reso?('<div style="margin:2px 0 7px;padding:7px 9px;border-radius:6px;background:'+(reso.tier==='high'?'rgba(240,185,11,.12)':(reso.tier==='small'?'rgba(210,153,34,.10)':'rgba(110,118,129,.12)'))+';border:1px solid '+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#6e7681'))+'">'
           +'<div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;font-family:monospace;color:'+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#8b949e'))+'">共振 '+reso.score+'</b><span style="font-size:10px;color:#8b949e">'+(reso.tier==='high'?'🎯 高勝率':(reso.tier==='small'?'⚡ 小單':'⊘ 監測'))+' · '+reso.fired+'/4 庫同向</span></div>'
           +'<div style="display:flex;gap:11px;margin-top:4px;font-size:10px">'+['ict','kbar','trend','harm'].map(function(x){var lbl={ict:'ICT',kbar:'K線',trend:'趨勢',harm:'諧波'}[x];var st=reso.lights[x];var col=st==='agree'?'#3fb950':(st==='conflict'?'#f85149':'#4a515c');var dot=st==='agree'?'●':(st==='conflict'?'✕':'○');return '<span style="color:'+col+'">'+dot+' '+lbl+'</span>';}).join('')+'</div>'
-          +'<div style="font-size:9px;color:#6e7681;font-family:monospace;margin-top:3px">'+reso.brk.join(' ')+'</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:7px">'
+            +'<div style="background:#0d1220;border:1px solid rgba(31,111,235,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#58A6FF">進場 '+(prop.enSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</div></div>'
+            +'<div style="background:#0d1220;border:1px solid rgba(248,81,73,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#f85149">停損 '+(prop.slSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#ff8a78">'+fmtPx(prop.sl,dp)+'</div></div>'
+            +'<div style="background:#0d1220;border:1px solid rgba(63,185,80,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#3fb950">止盈</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#56d364">'+fmtPx(prop.tp,dp)+'</div></div>'
+          +'</div>'
+          +'<div style="font-size:9px;color:#6e7681;font-family:monospace;margin-top:4px">'+reso.brk.join(' ')+'</div>'
           +'</div>'):'')
         +row('方向','<b>'+dirTxt+'</b>')
         +row('進場 <span style="color:#58A6FF">'+(prop.enSrc||'OTE')+'</span>','<b style="font-family:monospace;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</b>')
