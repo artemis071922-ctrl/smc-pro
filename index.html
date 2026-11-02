@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.45.0 · 決策指令列(現在該做什麼·帶你打單)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.46.0 · 三卡聚焦同標的(不打架)+狀態燈+精緻按鈕</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -3052,6 +3052,17 @@ body {
 .bottom-bar .smentry-rr{padding:2px 0 !important}
 .bottom-bar .smentry-cond{margin-top:4px !important}
 .bottom-bar .smentry-btn{padding-top:6px !important;padding-bottom:6px !important;margin-top:6px !important}
+/* ✅ 卡片狀態燈（放卡頂·最引導）*/
+.card-status-led{font-size:13px;font-weight:900;text-align:center;padding:6px 10px;border-radius:8px;margin:0 0 8px;letter-spacing:.6px;border:1.5px solid;line-height:1.25}
+.card-status-led[data-s="go"]{color:#06210c;background:linear-gradient(180deg,#56d364,#2ea043);border-color:#3fb950;box-shadow:0 0 16px rgba(63,185,80,.5);animation:cslPulse 1.5s ease-in-out infinite}
+.card-status-led[data-s="wait"]{color:#f0c050;background:rgba(210,153,34,.12);border-color:rgba(210,153,34,.5)}
+.card-status-led[data-s="off"]{color:#9aa4ae;background:rgba(139,148,158,.1);border-color:rgba(139,148,158,.35)}
+.card-status-led[data-s="exp"]{color:#ff8b7e;background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.45)}
+@keyframes cslPulse{0%,100%{box-shadow:0 0 16px rgba(63,185,80,.5)}50%{box-shadow:0 0 26px rgba(63,185,80,.8)}}
+/* ⚡ 精緻按鈕（保留原色·加深度/懸停/按壓）*/
+.card-execute-btn,.smentry-btn,.btn.adv-execute,.rs-exec{border-radius:9px !important;box-shadow:0 2px 0 rgba(0,0,0,.22),0 6px 16px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.2) !important;transition:transform .12s ease,box-shadow .12s ease,filter .12s ease !important;letter-spacing:.4px}
+.card-execute-btn:hover,.smentry-btn:hover,.btn.adv-execute:hover,.rs-exec:hover{filter:brightness(1.09) saturate(1.05);transform:translateY(-1px);box-shadow:0 4px 0 rgba(0,0,0,.22),0 10px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.28) !important}
+.card-execute-btn:active,.smentry-btn:active,.btn.adv-execute:active,.rs-exec:active{transform:translateY(1px) scale(.995);filter:brightness(.95);box-shadow:0 1px 0 rgba(0,0,0,.22),0 3px 10px rgba(0,0,0,.35) !important}
 </style>
 <script>
 // 🔍 縮放只套 .app；控制列可拖曳(存位置)；底部壓縮純 CSS；與刷新引擎零交集
@@ -7743,6 +7754,7 @@ injectICTFlagshipGrid();
     // ★修「訊號對不上」：高勝率卡的表頭/方向/分數/按鈕 全部跟戰情室同一標的（取代事件式殘留）
     (function(){
       var h=window.SYMRESO&&window.SYMRESO[wrK];
+      try{ setCardStatus(card, tradeStatus(h, 75, false)); }catch(_){}  // 高勝率卡狀態燈(門檻75)
       if(!card||!h||h.none||h.score==null) return;
       var isS2=h.dir==='short';
       var rk=1; try{ for(var si=0;si<SYMS.length;si++){ var o=window.SYMRESO[SYMS[si].k]; if(o&&!o.none&&o.score!=null&&o.score>h.score) rk++; } }catch(_){}
@@ -8237,6 +8249,16 @@ injectICTFlagshipGrid();
   function _advStatus(r){ return (r.trig&&r.trig.triggered&&r.score>=65)?'active':(((r.pos>=0.6||r.pos<=0.4)&&r.score>=50)?'pending':'expired'); }
   function paintSmallZone(r){
     if(!r) return; var k=r.sym, isS=r.dir==='short';
+    if(r.none){ // 聚焦標的無小單設定 → 監測中（避免殘留舊值/NaN）
+      try{ setCardStatus(document.querySelector('.smentry'), tradeStatus(r,65,false)); }catch(_){}
+      var t0=document.querySelector('.smentry-title'); if(t0) t0.innerHTML='⚡ '+k+' · <span style="color:#6e7681">監測中</span>';
+      var en0=document.getElementById('smEntry'); if(en0) en0.textContent='—';
+      var sl0=document.querySelector('.sm-row[data-target-line="sl_small"] .v'); if(sl0) sl0.textContent='—';
+      var tp0=document.querySelector('.sm-row[data-target-line="tp1"] .v'); if(tp0) tp0.textContent='—';
+      var c0=document.querySelector('.smentry-cond'); if(c0) c0.innerHTML='🃏 等結構成形 / 位置到折扣·溢價';
+      var b0=document.getElementById('smBtn'); if(b0 && !b0.classList.contains('executed')) b0.textContent='監測中 · 等訊號';
+      return;
+    }
     var cs=(window.CANDLES&&window.CANDLES[k])||[];
     var closes=cs.map(function(c){return c.c;});
     var ma5=_sma(cs,5,function(c){return c.c;}), ma20=_sma(cs,20,function(c){return c.c;});
@@ -8271,6 +8293,14 @@ injectICTFlagshipGrid();
     var cd=document.getElementById('smCountdown'); if(cd && r.tms){ var rem=Math.max(0,(r.tms+300000)-Date.now()); cd.textContent=('0'+Math.floor(rem/60000)).slice(-2)+':'+('0'+Math.floor((rem%60000)/1000)).slice(-2); }
     var btn=document.getElementById('smBtn'); if(btn && !btn.classList.contains('executed')) btn.textContent='⚡ 立即執行小單 · '+k+' '+(isS?'做空':'做多');
     var cl=document.getElementById('smCountLbl'); if(cl) cl.textContent=allGreen?'短窗中':'待觸發';
+    // 小單卡狀態燈 + 共振(讀四庫旗艦卡) — Artemis：小單卡需勝率高、讀所有旗艦卡
+    try{
+      var remS=(r.tms?Math.max(0,(r.tms+300000)-Date.now()):1);
+      setCardStatus(document.querySelector('.smentry'), tradeStatus(r, 65, remS<=0));
+      var libs=[]; if(r.lights){ if(r.lights.ict==='agree')libs.push('ICT'); if(r.lights.kbar==='agree')libs.push('K線'); if(r.lights.harm==='agree')libs.push('諧波'); if(r.lights.trend==='agree')libs.push('趨勢'); }
+      var condEl=document.querySelector('.smentry-cond');
+      if(condEl) condEl.innerHTML='🃏 共振 '+(r.fired!=null?r.fired:0)+'/4 庫'+(libs.length?'（'+libs.join('·')+'）':'')+' · 動能'+(allGreen?'全綠 ✓':'未齊');
+    }catch(_){}
   }
   function paintSignalStream(scan){
     var ul=document.getElementById('signalStream'); if(!ul) return;
@@ -8296,15 +8326,33 @@ injectICTFlagshipGrid();
       bar.style.cssText='padding:7px 13px;border-radius:7px;border:1px solid;font-size:13px;margin:0 8px 7px;display:flex;align-items:center;gap:9px;line-height:1.3;font-weight:800';
       wr.insertBefore(bar, wr.firstChild); }
     var inKz=false; try{ inKz=kzActive(); }catch(_){}
+    var focus=(typeof wrSymbol==='function')?wrSymbol():'BTC';
     var top=null; try{ for(var i=0;i<SYMS.length;i++){ var r=window.SYMRESO&&window.SYMRESO[SYMS[i].k]; if(r&&!r.none&&r.score!=null){ if(!top||r.score>top.score){ top=r; top._sym=SYMS[i].k; } } } }catch(_){}
+    var hint=(top&&top._sym&&top._sym!==focus&&top.score>=65)?(' ｜ 👉 切排位#1：'+top._sym):'';
     var txt,bg,col;
     if(!inKz){ txt='🔴 時段外 · 休息，別打單（只在 KZ 時段交易）'; bg='rgba(248,81,73,.12)'; col='#ff8b7e'; }
     else if(!top){ txt='🟡 KZ 內 · 全市場掃描中 · 目前無有效訊號 · 等'; bg='rgba(210,153,34,.12)'; col='#e3b341'; }
-    else if(top.score>=75){ var trg=top.trig&&top.trig.triggered; txt='🟢 可打主倉 → '+top._sym+' 高勝率 '+top.score+' 分 · 共振'+top.fired+'/4 · '+(trg?'已觸發，進戰情室確認七條件':'等掃蕩+MSS 觸發'); bg='rgba(63,185,80,.15)'; col='#7ee787'; }
-    else if(top.score>=65){ txt='⚡ 可打小卡 → '+top._sym+' '+top.score+' 分 · 共振'+top.fired+'/4 庫 · 短打 1R（緊止損）'; bg='rgba(240,185,11,.15)'; col='#F0B90B'; }
+    else if(top.score>=75){ var trg=top.trig&&top.trig.triggered; txt='🟢 可打主倉 → '+top._sym+' 高勝率 '+top.score+' 分 · 共振'+top.fired+'/4 · '+(trg?'已觸發，確認七條件':'等掃蕩+MSS 觸發')+hint; bg='rgba(63,185,80,.15)'; col='#7ee787'; }
+    else if(top.score>=65){ txt='⚡ 可打小卡 → '+top._sym+' '+top.score+' 分 · 共振'+top.fired+'/4 庫 · 短打 1R'+hint; bg='rgba(240,185,11,.15)'; col='#F0B90B'; }
     else { txt='🟡 KZ 內 · 掃描中 · 最高 '+top.score+' 分（'+top._sym+'）· <65 觀望，等更強訊號'; bg='rgba(210,153,34,.10)'; col='#e3b341'; }
     bar.innerHTML='<span style="font-size:10px;opacity:.65;letter-spacing:1px;flex-shrink:0">▶ 現在該做</span><span>'+txt+'</span>';
     bar.style.background=bg; bar.style.color=col; bar.style.borderColor=col;
+  }
+  // ✅ 卡片狀態燈（可打/等條件/時段外/過期）
+  function tradeStatus(r, need, freshBad){
+    var kz=false; try{ kz=kzActive(); }catch(_){}
+    if(!kz) return {t:'⛔ 時段外 · 別打', c:'off'};
+    if(freshBad) return {t:'🔴 已過期 · 重找訊號', c:'exp'};
+    if(!r||r.none||r.score==null) return {t:'⏸ 監測中 · 等結構', c:'wait'};
+    if(r.score<need) return {t:'⏸ 分數不足 '+r.score+'/'+need, c:'wait'};
+    if(!(r.trig&&r.trig.triggered)) return {t:'⏸ 等掃蕩+MSS 觸發', c:'wait'};
+    return {t:'✅ 可打 · 條件到位', c:'go'};
+  }
+  function setCardStatus(cardEl, st){
+    if(!cardEl||!st) return;
+    var led=cardEl.querySelector('.card-status-led');
+    if(!led){ led=document.createElement('div'); led.className='card-status-led'; cardEl.insertBefore(led, cardEl.firstChild); }
+    led.textContent=st.t; led.setAttribute('data-s', st.c);
   }
 
   function refreshAdvisorSmall(){
@@ -8347,29 +8395,42 @@ injectICTFlagshipGrid();
       }
     })();
     try{ renderDecisionBar(); }catch(_){}
-    if(!scan.length) return;
     scan.sort(function(a,b){ return b.score-a.score; });
-    // 軍師卡 = 全市場最高分
-    var A=scan[0], isS=A.dir==='short';
-    window.lastAdvisorSym=A.sym;
+    // ★三卡聚焦同一標的（戰情室標的）→ 軍師/高勝率/小單 都讀它的四庫共振 → 與排位5欄不打架
+    var wrK3=(typeof wrSymbol==='function')?wrSymbol():'BTC';
+    var F=window.SYMRESO&&window.SYMRESO[wrK3];
+    window.lastAdvisorSym=wrK3;
     var set=function(id,fn){ var el=document.getElementById(id); if(el) fn(el); };
-    set('advSym',function(e){ e.textContent=A.sym; });
-    set('advModel',function(e){ e.textContent=A.model; });
-    set('advSide',function(e){ e.textContent=isS?'空':'多'; e.className='side-tag '+A.dir; });
-    set('advScore',function(e){ e.innerHTML=A.score+'<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>'; e.className='adv-score '+(A.score>=75?'high':(A.score>=65?'mid':'low')); });
-    set('advRankBadge',function(e){ e.textContent='全市場最高分'; });
-    var conds=_advConds(A);
-    set('advConds',function(e){ e.innerHTML=conds.map(function(c){ return '<div class="'+(c.pass?'ok':'fail')+'">'+c.label+'</div>'; }).join(''); });
-    var st=_advStatus(A);
-    set('advAction',function(e){
-      if(st==='active'){ e.innerHTML='🟢 軍師訊號生效 · '+A.sym+' '+A.model+' · '+(isS?'做空':'做多')+' · '+A.score+' 分'; e.className='adv-action-text go'; }
-      else if(st==='pending'){ e.innerHTML='🟡 軍師待確認 · '+A.sym+' '+A.model+' · 掃蕩/MSS 未齊'; e.className='adv-action-text wait'; }
-      else { e.innerHTML='🔴 '+A.sym+' 位置未到 · 等回折扣/溢價再出手'; e.className='adv-action-text no'; }
-    });
-    // 小單區 = 市場最佳「小單級」(65–74)，無則取最高分
-    var small=null; for(var i=0;i<scan.length;i++){ if(scan[i].score>=65&&scan[i].score<75){ small=scan[i]; break; } }
-    if(!small) small=scan[0];
-    try{ paintSmallZone(small); }catch(_){}
+    var rkBadge=(function(){ var rc=document.querySelector('.rs-card[data-sym="'+wrK3+'"] .rs-rank'); return rc?('排位 '+rc.textContent):'聚焦'; })();
+    // --- 軍師卡（聚焦標的 · 綜合分析·讀四庫）---
+    try{ setCardStatus(document.querySelector('#advisor'), tradeStatus(F, 65, false)); }catch(_){}
+    if(F && !F.none && F.score!=null){
+      var isS=F.dir==='short';
+      set('advSym',function(e){ e.textContent=wrK3; });
+      set('advModel',function(e){ e.textContent=F.model; });
+      set('advSide',function(e){ e.textContent=isS?'空':'多'; e.className='side-tag '+F.dir; });
+      set('advScore',function(e){ e.innerHTML=F.score+'<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>'; e.className='adv-score '+(F.score>=75?'high':(F.score>=65?'mid':'low')); });
+      set('advRankBadge',function(e){ e.textContent=rkBadge; });
+      var conds=_advConds(F);
+      set('advConds',function(e){ e.innerHTML=conds.map(function(c){ return '<div class="'+(c.pass?'ok':'fail')+'">'+c.label+'</div>'; }).join(''); });
+      var st=_advStatus(F);
+      set('advAction',function(e){
+        if(st==='active'){ e.innerHTML='🟢 軍師訊號生效 · '+wrK3+' '+F.model+' · '+(isS?'做空':'做多')+' · 共振 '+F.score+'('+F.fired+'/4)'; e.className='adv-action-text go'; }
+        else if(st==='pending'){ e.innerHTML='🟡 軍師待確認 · '+wrK3+' '+F.model+' · 掃蕩/MSS 未齊'; e.className='adv-action-text wait'; }
+        else { e.innerHTML='🔴 '+wrK3+' 位置未到 · 等回折扣/溢價再出手'; e.className='adv-action-text no'; }
+      });
+    } else {
+      set('advSym',function(e){ e.textContent=wrK3; });
+      set('advModel',function(e){ e.textContent='監測中'; });
+      set('advSide',function(e){ e.textContent='—'; e.className='side-tag'; });
+      set('advScore',function(e){ e.innerHTML='—<span style="font-size:11px;font-weight:600;opacity:0.7">/100</span>'; e.className='adv-score low'; });
+      set('advRankBadge',function(e){ e.textContent=rkBadge; });
+      set('advConds',function(e){ e.innerHTML='<div class="fail">等結構成形 / 位置到折扣·溢價</div>'; });
+      set('advAction',function(e){ e.innerHTML='🟡 '+wrK3+' 監測中 · 等位置到折扣/溢價'; e.className='adv-action-text wait'; });
+    }
+    // --- 小單卡（同一聚焦標的）---
+    try{ paintSmallZone(F && !F.none ? F : {sym:wrK3, none:true, dir:'long', score:0}); }catch(_){}
+    // --- 訊號流 = 全市場即時掃描（選幣層，維持）---
     try{ paintSignalStream(scan); }catch(_){}
   }
 
