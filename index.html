@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.41.0 · 戰情室大標接真+KP/諧波掃描燈接真(全版面真)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.42.0 · 修K線塌掉(跨標的汙染)+高勝率卡訊號一致化</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7679,6 +7679,9 @@ injectICTFlagshipGrid();
     _lastSyncSym=k;
     var sel=document.getElementById('l1sym');
     if(sel && sel.value!==k) sel.value=k;
+    // ★修 bug：換標的時清空 L1 進場/SL/TP 輸入，否則舊標的(如 BTC 7萬)的價位會被當成新標的(如 XRP 1.2)的計畫，
+    //   汙染圖表 Y 軸刻度 → K 線塌成一條線。清空後改顯示該標的的自動提議。
+    ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
     try{ if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){}
     try{ renderCalc(); }catch(_){}
     try{ paintCandleStatus(); }catch(_){}
@@ -7691,6 +7694,8 @@ injectICTFlagshipGrid();
     var c=lastCalc, wrK=wrSymbol();
     var liveWr=(window.LIVE_PX && typeof window.LIVE_PX[wrK]==='number')? window.LIVE_PX[wrK] : null;
     var drive=!!(c && c.entry!=null && c.sl!=null && c.tp!=null && c.k===wrK);
+    // ★防跨標的汙染：手填計畫價位與即時價非同量級 → 丟棄，改走自動提議
+    if(drive && typeof liveWr==='number' && liveWr>0){ var _okd=function(v){ return v/liveWr>0.2 && v/liveWr<5; }; if(!(_okd(c.entry)&&_okd(c.sl)&&_okd(c.tp))) drive=false; }
     // 手填 L1（你的計畫）優先；否則用引擎自動提議（接真·非範例）
     var auto=null;
     if(!drive){ var sr=(window.SYMRESO&&window.SYMRESO[wrK]); if(sr && !sr.none && sr.entry!=null && sr.sl!=null && sr.tp!=null) auto=sr; }
@@ -7730,6 +7735,20 @@ injectICTFlagshipGrid();
         if(t1) t1.textContent=EX; if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
       }
     }
+    // ★修「訊號對不上」：高勝率卡的表頭/方向/分數/按鈕 全部跟戰情室同一標的（取代事件式殘留）
+    (function(){
+      var h=window.SYMRESO&&window.SYMRESO[wrK];
+      if(!card||!h||h.none||h.score==null) return;
+      var isS2=h.dir==='short';
+      var rk=1; try{ for(var si=0;si<SYMS.length;si++){ var o=window.SYMRESO[SYMS[si].k]; if(o&&!o.none&&o.score!=null&&o.score>h.score) rk++; } }catch(_){}
+      var ccl=card.querySelector('.cc-lbl');
+      if(ccl) ccl.innerHTML=wrK+' · '+h.model+' <span style="color:var(--'+(isS2?'red':'green')+')">'+(isS2?'▼':'▲')+'</span> <span style="color:var(--text-dim);font-size:11px;margin-left:6px;font-weight:600">'+(rk===1?'#1 最強':'#'+rk)+'</span>';
+      var es=document.getElementById('entrySide'); if(es){ es.textContent=isS2?'做空':'做多'; es.className='entry-side '+(isS2?'short':'long'); }
+      var scn=document.getElementById('scoreNum'); if(scn){ scn.textContent=h.score; scn.className='card-score-num '+(isS2?'short':'long'); }
+      var scf=document.getElementById('scoreFill'); if(scf){ scf.style.width=h.score+'%'; scf.className='score-fill '+(isS2?'short':'long'); }
+      var eb=card.querySelector('.card-execute-btn');
+      if(eb && !eb.classList.contains('executed')){ eb.textContent='⚡ 立即執行 · '+(isS2?'做空':'做多')+' '+wrK; eb.onclick=function(ev){ ev.stopPropagation(); if(typeof execHighTrade==='function') execHighTrade(); }; }
+    })();
     if(src){
       sv('.warroom .wd-cell.entry .wd-val', fmtPx(src.entry,symDp(wrK)));
       sv('.warroom .wd-cell.sl .wd-val', fmtPx(src.sl,symDp(wrK)));
@@ -7761,6 +7780,8 @@ injectICTFlagshipGrid();
     if(typeof live==='number' && data.length){ var _ld=data[data.length-1]; data[data.length-1]={t:_ld.t,o:_ld.o,h:Math.max(_ld.h,live),l:Math.min(_ld.l,live),c:live,confirm:_ld.confirm}; }
     var nowPx=data[data.length-1].c;
     var c=lastCalc, plan=(c&&c.k===k&&c.entry!=null&&c.sl!=null&&c.tp!=null)?c:null;
+    // ★防跨標的汙染：計畫價位若與即時價差太離譜(非同一量級)→ 視為殘留舊標的，丟棄，不讓它撐爆 Y 軸
+    if(plan && typeof live==='number' && live>0){ var _ok=function(v){ return typeof v==='number' && v/live>0.2 && v/live<5; }; if(!(_ok(plan.entry)&&_ok(plan.sl)&&_ok(plan.tp))) plan=null; }
     var det=detectStructure(cs);
     var pmin=Infinity,pmax=-Infinity;
     data.forEach(function(d){ if(d.l<pmin)pmin=d.l; if(d.h>pmax)pmax=d.h; });
