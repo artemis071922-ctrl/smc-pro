@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.43.0 · 左側5欄分數接真(與排位卡一致)+紅空綠多圖例</span></div>
+    <div class="logo">smc-pro<span class="v">v0.44.0 · 排位條按真分數重排(#1永遠真最強)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -8168,6 +8168,17 @@ injectICTFlagshipGrid();
             inKz:inKz, lights:reso?reso.lights:null, brk:reso?reso.brk:[], trig:trig, lv:lv, ch:ch,
             close:last?last.c:null, tms:last?last.t:null};
   }
+  // ★排位重排：頂部 5 張卡按真分數由高到低排序，#1 永遠是真最強（data-rank/data-sym 不動 → 點擊仍對）
+  function sortRankStrip(){
+    var strip=document.querySelector('.rank-strip'); if(!strip) return;
+    var cards=Array.prototype.slice.call(strip.querySelectorAll('.rs-card'));
+    if(cards.length<2) return;
+    cards.forEach(function(c){ var n=parseInt((c.querySelector('.rs-score')||{}).textContent,10); c._sc=isNaN(n)?-1:n; });
+    var sorted=cards.slice().sort(function(a,b){ return (b._sc-a._sc)||((+a.dataset.rank)-(+b.dataset.rank)); });
+    var changed=false; for(var i=0;i<cards.length;i++){ if(cards[i]!==sorted[i]){ changed=true; break; } }
+    if(changed){ sorted.forEach(function(c){ strip.appendChild(c); }); }
+    sorted.forEach(function(c,idx){ var rr=c.querySelector('.rs-rank'); if(rr) rr.textContent='#'+(idx+1); });
+  }
   function refreshRankCards(){
     if(typeof SYMS==='undefined') return;
     SYMS.forEach(function(s){
@@ -8204,6 +8215,7 @@ injectICTFlagshipGrid();
         var scf=document.querySelector('#highEntryCard .score-fill'); if(scf) scf.style.width=wr.score+'%';
       }
     }catch(_){}
+    try{ sortRankStrip(); }catch(_){}
   }
 
   // 全部接真 · 階段3：軍師卡 + 小單區 → 真掃描驅動（取代 demo 73/100、105,080）
