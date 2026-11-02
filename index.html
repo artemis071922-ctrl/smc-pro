@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.39.0 · 縮放可拖曳+底部三欄壓縮(小螢幕優化)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.40.0 · 高勝率卡接真(自動提議取代範例)+小單燈號中文註解</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2910,16 +2910,19 @@ body {
         <div class="sm-lamp">
           <div class="sm-cell">
             <div class="sm-cell-lbl">5/20 MA</div>
+            <div class="sm-cell-note">5/20 均線交叉</div>
             <span class="led-pro green sm-lamp-led"></span>
             <div class="sm-cell-result green">金叉 ✓</div>
           </div>
           <div class="sm-cell">
             <div class="sm-cell-lbl">MACD</div>
+            <div class="sm-cell-note">快慢線動能</div>
             <span class="led-pro green sm-lamp-led"></span>
             <div class="sm-cell-result green">正動能 ✓</div>
           </div>
           <div class="sm-cell">
             <div class="sm-cell-lbl">偏向同向</div>
+            <div class="sm-cell-note">與趨勢同向</div>
             <span class="led-pro green sm-lamp-led"></span>
             <div class="sm-cell-result green">看漲配合 ✓</div>
           </div>
@@ -3033,6 +3036,7 @@ body {
 .bottom-bar .small-title{margin-bottom:4px !important}
 .bottom-bar .sm-lamp{gap:8px !important}
 .bottom-bar .sm-cell{padding:4px 4px !important}
+.bottom-bar .sm-cell-note{font-size:9px !important;color:var(--text-dim);margin:1px 0 2px !important;letter-spacing:0 !important;line-height:1.2;opacity:.8}
 .bottom-bar .sm-cell-result{margin-top:2px !important}
 .bottom-bar .mom-status{padding:5px 9px !important;margin-top:5px !important}
 .bottom-bar .signal-stream{max-height:120px !important}
@@ -7681,23 +7685,28 @@ injectICTFlagshipGrid();
     var c=lastCalc, wrK=wrSymbol();
     var liveWr=(window.LIVE_PX && typeof window.LIVE_PX[wrK]==='number')? window.LIVE_PX[wrK] : null;
     var drive=!!(c && c.entry!=null && c.sl!=null && c.tp!=null && c.k===wrK);
-    var rrTxt=(drive && c.rr!=null)? (' · '+(Math.round(c.rr*10)/10)+'R') : '';
+    // 手填 L1（你的計畫）優先；否則用引擎自動提議（接真·非範例）
+    var auto=null;
+    if(!drive){ var sr=(window.SYMRESO&&window.SYMRESO[wrK]); if(sr && !sr.none && sr.entry!=null && sr.sl!=null && sr.tp!=null) auto=sr; }
+    var src = drive? {entry:c.entry,sl:c.sl,tp:c.tp,rr:c.rr} : (auto? {entry:auto.entry,sl:auto.sl,tp:auto.tp,rr:auto.rr} : null);
+    var rrTxt=(src && src.rr!=null)? (' · '+(Math.round(src.rr*10)/10)+'R') : '';
     var hostReal=(function(){var h=document.getElementById('wrChart');return !!(h&&h.dataset&&h.dataset.real==='1');})();
     if(!hostReal) svg.querySelectorAll('text').forEach(function(t){
       var txt=t.textContent.trim();
-      if(txt.indexOf('模擬示意')>=0 || txt.indexOf('範例示意')>=0 || txt.indexOf('你的計畫')>=0){
+      if(txt.indexOf('模擬示意')>=0 || txt.indexOf('範例示意')>=0 || txt.indexOf('你的計畫')>=0 || txt.indexOf('系統偵測')>=0){
         if(drive){ t.textContent='🎯 你的計畫 · OKX 現價實時'; t.setAttribute('fill','#3fb950'); }
-        else { t.textContent='📘 範例示意 · 非真實價位（填 L1 計算器即接真）'; t.setAttribute('fill','#d29922'); }
+        else if(auto){ t.textContent='🔍 系統偵測 · 自動提議（填 L1 可改用你的計畫）'; t.setAttribute('fill','#58A6FF'); }
+        else { t.textContent='📘 範例示意 · 等結構成形或填 L1'; t.setAttribute('fill','#d29922'); }
       }
       else if(txt.indexOf('現在')===0){ if(liveWr!=null) t.textContent='現在 '+fmtPx(liveWr,symDp(wrK)); }
-      else if(txt.indexOf('進場')===0){ t.textContent=drive? ('進場 '+fmtPx(c.entry,symDp(wrK))) : '進場 （範例）'; }
-      else if(txt.indexOf('主 SL')===0){ t.textContent=drive? ('主 SL '+fmtPx(c.sl,symDp(wrK))) : '主 SL （範例）'; }
-      else if(txt.indexOf('TP1')===0){ t.textContent=drive? ('TP1 '+fmtPx(c.tp,symDp(wrK))+rrTxt) : txt; }
-      else if(txt.indexOf('BSL')===0){ if(!drive) t.textContent='BSL （範例）'; }
+      else if(txt.indexOf('進場')===0){ t.textContent=src? ('進場 '+fmtPx(src.entry,symDp(wrK))) : '進場 （範例）'; }
+      else if(txt.indexOf('主 SL')===0){ t.textContent=src? ('主 SL '+fmtPx(src.sl,symDp(wrK))) : '主 SL （範例）'; }
+      else if(txt.indexOf('TP1')===0){ t.textContent=src? ('TP1 '+fmtPx(src.tp,symDp(wrK))+rrTxt) : txt; }
+      else if(txt.indexOf('BSL')===0){ if(!src) t.textContent='BSL （範例）'; }
     });
     var EX='（範例）';
     function sv(sel,v){ var el=document.querySelector(sel); if(el) el.textContent=v; }
-    // 右側高勝率進場卡的「價位」：drive 顯真值，否則標範例（分數/型號屬 RANK_DB 大改版，之後接）
+    // 右側高勝率進場卡的「價位」：手填>自動提議>範例
     var card=document.getElementById('highEntryCard');
     if(card){
       var e=card.querySelector('[data-target-line="entry"] .v');
@@ -7705,21 +7714,21 @@ injectICTFlagshipGrid();
       var t1=card.querySelector('.tp-table .v[data-target-line="tp1"]');
       var t2=card.querySelector('.tp-table .v[data-target-line="tp2"]');
       var t3=card.querySelector('.tp-table .v[data-target-line="tp3"]');
-      if(drive){
-        if(e) e.textContent=fmtPx(c.entry,symDp(wrK));
-        if(s) s.textContent=fmtPx(c.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(c.entry-c.sl),symDp(wrK));
-        if(t1) t1.textContent=fmtPx(c.tp,symDp(wrK));
+      if(src){
+        if(e) e.textContent=fmtPx(src.entry,symDp(wrK));
+        if(s) s.textContent=fmtPx(src.sl,symDp(wrK))+' · 1R = '+fmtPx(Math.abs(src.entry-src.sl),symDp(wrK));
+        if(t1) t1.textContent=fmtPx(src.tp,symDp(wrK));
         if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
       } else {
         if(e) e.textContent=EX; if(s) s.textContent=EX;
         if(t1) t1.textContent=EX; if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
       }
     }
-    if(drive){
-      sv('.warroom .wd-cell.entry .wd-val', fmtPx(c.entry,symDp(wrK)));
-      sv('.warroom .wd-cell.sl .wd-val', fmtPx(c.sl,symDp(wrK)));
+    if(src){
+      sv('.warroom .wd-cell.entry .wd-val', fmtPx(src.entry,symDp(wrK)));
+      sv('.warroom .wd-cell.sl .wd-val', fmtPx(src.sl,symDp(wrK)));
       sv('.warroom .wd-cell.sl-small .wd-val', EX);
-      sv('.warroom .wd-tp[data-target-line="tp1"] .wd-tp-val', fmtPx(c.tp,symDp(wrK)));
+      sv('.warroom .wd-tp[data-target-line="tp1"] .wd-tp-val', fmtPx(src.tp,symDp(wrK)));
       sv('.warroom .wd-tp[data-target-line="tp2"] .wd-tp-val', EX);
       sv('.warroom .wd-tp[data-target-line="tp3"] .wd-tp-val', EX);
     } else {
@@ -8226,13 +8235,16 @@ injectICTFlagshipGrid();
   function refreshAdvisorSmall(){
     if(typeof SYMS==='undefined'||typeof RANK_DB==='undefined') return;
     var scan=[];
-    SYMS.forEach(function(s){ var r; try{ r=symbolResonance(s.k); }catch(_){ return; } if(r&&!r.none&&r.score!=null){ r.sym=s.k; scan.push(r); } });
+    window.SYMRESO=window.SYMRESO||{};   // 每標的真提議快取（給 syncWarRoom 高勝率卡接真讀，省得重算）
+    SYMS.forEach(function(s){ var r; try{ r=symbolResonance(s.k); }catch(_){ r=null; } window.SYMRESO[s.k]=r; if(r&&!r.none&&r.score!=null){ r.sym=s.k; scan.push(r); } });
     // 真訊號寫回 RANK_DB → pickTopSignal / 執行鈕 讀到真的（顯示＝執行一致）
     scan.forEach(function(r){
       for(var i=1;i<=5;i++){ if(RANK_DB[i]&&RANK_DB[i].sym===r.sym){
         var risk=Math.abs(r.entry-r.sl)||1, tp1=r.dir==='short'?(r.entry-risk):(r.entry+risk);
         RANK_DB[i].advisor={ model:r.model, side:r.dir, score:r.score, chapters:r.ch, status:_advStatus(r), conditions:_advConds(r) };
         RANK_DB[i].small={ model:r.model, modelFull:r.model+' 短倉', side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:tp1, tp2:tp1, tp3:tp1, chapters:r.ch, narrative:'5M 短倉 1R' };
+        // 高勝率卡接真（merge 保留 expiryMs/signalAt 等舊欄）→ 執行鈕打真值
+        RANK_DB[i].high=Object.assign({}, RANK_DB[i].high, { model:r.model, modelFull:r.model, side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:r.tp, chapters:r.ch });
         break;
       } }
     });
