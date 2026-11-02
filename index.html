@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.44.0 · 排位條按真分數重排(#1永遠真最強)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.44.1 · 名次一致化(戰情室名次=排位條位置)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -5684,7 +5684,8 @@ function promoteRank(n) {
 
   // === 戰情室 Bar ===
   const $rank = document.querySelector('.wr-rank');
-  if ($rank) $rank.textContent = '#' + n;
+  // 用排位條「重排後的位置」當名次（與頂部 #N 一致），而非固定 data-rank
+  if ($rank) { try { const _rc = document.querySelector('.rs-card[data-sym="' + (RANK_DB[n] && RANK_DB[n].sym) + '"] .rs-rank'); $rank.textContent = _rc ? _rc.textContent : ('#' + n); } catch(e){ $rank.textContent = '#' + n; } }
   const $tier = document.querySelector('.wr-tier');
   if ($tier) {
     if (d.score >= 75) { $tier.textContent = '🎯 高勝率'; $tier.style.background = 'rgba(240,185,11,0.18)'; $tier.style.color = '#F0B90B'; }
@@ -8307,6 +8308,8 @@ injectICTFlagshipGrid();
     (function(){
       var wrK2=(typeof wrSymbol==='function')?wrSymbol():'BTC';
       var h=window.SYMRESO&&window.SYMRESO[wrK2];
+      // 戰情室名次與頂部排位條(重排後位置)一致
+      try{ var _rc=document.querySelector('.rs-card[data-sym="'+wrK2+'"] .rs-rank'), _wr=document.querySelector('.wr-rank'); if(_wr&&_rc) _wr.textContent=_rc.textContent; }catch(_){}
       var no=document.querySelector('.wr-hero .wr-hero-no');
       var nm=document.getElementById('wrName'), ar=document.getElementById('wrArrow'), subEl=document.getElementById('wrSub'), hdir=document.getElementById('wrHeroDir');
       if(h && !h.none && h.model){
