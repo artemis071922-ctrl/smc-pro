@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.40.0 · 高勝率卡接真(自動提議取代範例)+小單燈號中文註解</span></div>
+    <div class="logo">smc-pro<span class="v">v0.41.0 · 戰情室大標接真+KP/諧波掃描燈接真(全版面真)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -6605,17 +6605,23 @@ window.addEventListener('load', () => {
     { key: 'CRB', name: 'Crab', ratio: '1.618' }
   ];
 
-  // 模擬偵測（真實 K 線接入前的占位邏輯）· 目的：讓 UI 展現，等 candle 流接入時只需替換此函數
+  // 接真：讀 L1 真偵測器（window.smcKbars / window.smcHarm），對映到 6 KP + 4 諧波目標亮燈
   function mockDetectKP() {
-    // 若已有真實偵測 API 掛在 window.detectKP 就用它
-    if (typeof window.detectKP === 'function') return window.detectKP();
-    // 否則顯示「等待 K 線流」狀態
-    return KP_DETECT_TARGETS.map(t => ({ ...t, status: 'wait', note: '等 5M K 線流' }));
+    const hits = {};
+    if (typeof window.smcKbars === 'function') { try { window.smcKbars().forEach(p => { hits[p.num] = p; }); } catch (_) {} }
+    return KP_DETECT_TARGETS.map(t => {
+      const h = hits[t.key];
+      return { ...t, status: h ? 'hit' : 'wait', side: h ? (h.dir === 'short' ? '空' : (h.dir === 'long' ? '多' : '中')) : t.side, note: h ? h.name : '等訊號' };
+    });
   }
 
   function mockDetectHarmonic() {
-    if (typeof window.detectHarmonic === 'function') return window.detectHarmonic();
-    return HARMONIC_DETECT_TARGETS.map(t => ({ ...t, status: 'wait', note: '需 5 點 XABCD' }));
+    const hits = {};
+    if (typeof window.smcHarm === 'function') { try { window.smcHarm().forEach(p => { hits[p.name] = p; }); } catch (_) {} }
+    return HARMONIC_DETECT_TARGETS.map(t => {
+      const h = hits[t.name];
+      return { ...t, status: h ? 'hit' : 'wait', side: h ? (h.dir === 'short' ? '空' : '多') : '', note: h ? (h.note || '') : '需 5 點 XABCD' };
+    });
   }
 
   // 建 DOM 面板（追加在 #advConds 下方）
@@ -6653,7 +6659,7 @@ window.addEventListener('load', () => {
     // 底部說明
     const foot = document.createElement('div');
     foot.style.cssText = 'font-size:10px;color:var(--text-dim);margin-top:6px;padding-top:5px;border-top:1px dashed rgba(255,255,255,0.05);line-height:1.4';
-    foot.innerHTML = '💡 <b>四庫協作</b>：ICT 授權 + K線/諧波為加分共振 · 目前 K 線流待 OKX 接入 (Phase B)';
+    foot.innerHTML = '💡 <b>四庫協作</b>：ICT 授權 + K線/諧波為加分共振 · 🟢 已接 OKX 真 K 線即時掃描';
     wrap.appendChild(foot);
 
     anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
@@ -8232,6 +8238,10 @@ injectICTFlagshipGrid();
     }).join('');
     var cont=ul.closest('div'); if(cont){ var cnt=cont.querySelector('.small-title .r'); if(cnt) cnt.textContent=list.length+' 筆 · 即時'; }
   }
+  // 橋接：把 L1 真偵測器掛上 window，給軍師卡的「K線/諧波掃描」面板接真讀（那面板在別的 script 區塊）
+  window.smcKbars=function(sym){ var k=sym||window.lastAdvisorSym||curSym(); try{ return detectKbars((window.CANDLES&&window.CANDLES[k])||[]); }catch(_){ return []; } };
+  window.smcHarm =function(sym){ var k=sym||window.lastAdvisorSym||curSym(); try{ return detectHarmonic((window.CANDLES&&window.CANDLES[k])||[]); }catch(_){ return []; } };
+
   function refreshAdvisorSmall(){
     if(typeof SYMS==='undefined'||typeof RANK_DB==='undefined') return;
     var scan=[];
@@ -8248,10 +8258,32 @@ injectICTFlagshipGrid();
         break;
       } }
     });
+    // 🎯 戰情室大標接真（編號/型態名/方向/劇本）— 讀當前戰情室標的即時偵測
+    (function(){
+      var wrK2=(typeof wrSymbol==='function')?wrSymbol():'BTC';
+      var h=window.SYMRESO&&window.SYMRESO[wrK2];
+      var no=document.querySelector('.wr-hero .wr-hero-no');
+      var nm=document.getElementById('wrName'), ar=document.getElementById('wrArrow'), subEl=document.getElementById('wrSub'), hdir=document.getElementById('wrHeroDir');
+      if(h && !h.none && h.model){
+        var hs=h.dir==='short', sp=h.model.split(' '), num=sp[0], nmv=sp.slice(1).join(' ')||h.model;
+        if(no) no.textContent=num;
+        if(nm) nm.textContent=nmv;
+        if(ar){ ar.textContent=hs?'▼':'▲'; ar.className='wr-arrow '+(hs?'short':'long'); }
+        if(hdir){ hdir.textContent=hs?'做空':'做多'; hdir.className='wr-hero-dir '+(hs?'short':'long'); }
+        if(subEl) subEl.textContent=wrK2+' · '+(hs?'溢價回撤→反轉':'折扣回撤→反轉')+' · 共振 '+h.score+'('+h.fired+'/4 庫)';
+      } else {
+        if(no) no.textContent='◆';
+        if(nm) nm.textContent='監測中';
+        if(ar){ ar.textContent='◆'; ar.className='wr-arrow'; }
+        if(hdir){ hdir.textContent='觀望'; hdir.className='wr-hero-dir'; }
+        if(subEl) subEl.textContent=wrK2+' · 等結構成形 / 位置到折扣·溢價';
+      }
+    })();
     if(!scan.length) return;
     scan.sort(function(a,b){ return b.score-a.score; });
     // 軍師卡 = 全市場最高分
     var A=scan[0], isS=A.dir==='short';
+    window.lastAdvisorSym=A.sym;
     var set=function(id,fn){ var el=document.getElementById(id); if(el) fn(el); };
     set('advSym',function(e){ e.textContent=A.sym; });
     set('advModel',function(e){ e.textContent=A.model; });
