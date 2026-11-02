@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.47.0 · 主視覺(決策列放大)+可打卡發光+動能圖例</span></div>
+    <div class="logo">smc-pro<span class="v">v0.47.1 · 修監測中留舊值(右卡清乾淨)+小單燈號字放大</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -3044,7 +3044,7 @@ body {
 .bottom-bar .small-title{margin-bottom:4px !important}
 .bottom-bar .sm-lamp{gap:8px !important}
 .bottom-bar .sm-cell{padding:4px 4px !important}
-.bottom-bar .sm-cell-note{font-size:9px !important;color:var(--text-dim);margin:1px 0 2px !important;letter-spacing:0 !important;line-height:1.2;opacity:.8}
+.bottom-bar .sm-cell-note{font-size:11px !important;color:#9aa7b4 !important;margin:2px 0 3px !important;letter-spacing:0 !important;line-height:1.25;opacity:1;font-weight:600 !important}
 .bottom-bar .sm-cell-result{margin-top:2px !important}
 .bottom-bar .mom-status{padding:5px 9px !important;margin-top:5px !important}
 .bottom-bar .signal-stream{max-height:120px !important}
@@ -7765,7 +7765,16 @@ injectICTFlagshipGrid();
     (function(){
       var h=window.SYMRESO&&window.SYMRESO[wrK];
       try{ setCardStatus(card, tradeStatus(h, 75, false)); }catch(_){}  // 高勝率卡狀態燈(門檻75)
-      if(!card||!h||h.none||h.score==null) return;
+      if(!card) return;
+      // ★修「監測中沒清乾淨留舊值」：聚焦標的無 setup → 清成監測，不留上一個標的的舊分數/型號
+      if(!h||h.none||h.score==null){
+        var _ccl=card.querySelector('.cc-lbl'); if(_ccl) _ccl.innerHTML=wrK+' · <span style="color:#6e7681">監測中 · 等結構</span>';
+        var _es=document.getElementById('entrySide'); if(_es){ _es.textContent='觀望'; _es.className='entry-side'; }
+        var _scn=document.getElementById('scoreNum'); if(_scn){ _scn.textContent='—'; _scn.className='card-score-num'; }
+        var _scf=document.getElementById('scoreFill'); if(_scf) _scf.style.width='0%';
+        var _eb=card.querySelector('.card-execute-btn'); if(_eb && !_eb.classList.contains('executed')) _eb.textContent='監測中 · 等訊號';
+        return;
+      }
       var isS2=h.dir==='short';
       var rk=1; try{ for(var si=0;si<SYMS.length;si++){ var o=window.SYMRESO[SYMS[si].k]; if(o&&!o.none&&o.score!=null&&o.score>h.score) rk++; } }catch(_){}
       var ccl=card.querySelector('.cc-lbl');
@@ -8232,10 +8241,15 @@ injectICTFlagshipGrid();
     });
     // 戰情室 hero 大分數 + 高勝率卡分數 接真（當前標的）
     try{ var wr=symbolResonance(wrSymbol());
+      var ws=document.getElementById('wrScore'), scn=document.querySelector('#highEntryCard .card-score-num'), scf=document.querySelector('#highEntryCard .score-fill');
       if(wr && !wr.none && wr.score!=null){
-        var ws=document.getElementById('wrScore'); if(ws) ws.textContent=wr.score;
-        var scn=document.querySelector('#highEntryCard .card-score-num'); if(scn) scn.textContent=wr.score;
-        var scf=document.querySelector('#highEntryCard .score-fill'); if(scf) scf.style.width=wr.score+'%';
+        if(ws) ws.textContent=wr.score;
+        if(scn) scn.textContent=wr.score;
+        if(scf) scf.style.width=wr.score+'%';
+      } else { // 監測中 → 清「—」不留舊分數
+        if(ws) ws.textContent='—';
+        if(scn) scn.textContent='—';
+        if(scf) scf.style.width='0%';
       }
     }catch(_){}
     try{ sortRankStrip(); }catch(_){}
