@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.38.0 · 畫面縮放(小螢幕適配·50~130%)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.39.0 · 縮放可拖曳+底部三欄壓縮(小螢幕優化)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -3015,37 +3015,56 @@ body {
 
 <div class="toast" id="toast"></div>
 
-<!-- 🔍 畫面縮放（純前端·只縮 .app·不碰刷新引擎）-->
+<!-- 🔍 畫面縮放(可拖曳) + 底部三欄壓縮（純前端·不碰刷新引擎）-->
 <div id="zoomCtl">
   <button id="zoomOut" type="button" aria-label="縮小">−</button>
-  <span id="zoomLbl">100%</span>
+  <span id="zoomLbl" title="按住可拖曳移動">100%</span>
   <button id="zoomIn" type="button" aria-label="放大">＋</button>
   <button id="zoomReset" type="button" aria-label="重設縮放">⟲</button>
 </div>
 <style>
-#zoomCtl{position:fixed;left:8px;bottom:8px;z-index:2147483000;display:flex;align-items:center;gap:3px;background:rgba(13,18,32,.94);border:1px solid #2a3340;border-radius:999px;padding:3px 5px;box-shadow:0 3px 12px rgba(0,0,0,.55)}
+#zoomCtl{position:fixed;left:50%;bottom:8px;transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:3px;background:rgba(13,18,32,.94);border:1px solid #2a3340;border-radius:999px;padding:3px 5px;box-shadow:0 3px 12px rgba(0,0,0,.55);touch-action:none;user-select:none;-webkit-user-select:none}
 #zoomCtl button{width:32px;height:32px;border:none;border-radius:50%;background:#1c2430;color:#e6edf3;font-size:17px;font-weight:800;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;padding:0}
 #zoomCtl button:active{background:#58A6FF;color:#0d1220}
 #zoomCtl #zoomReset{font-size:14px;background:transparent;width:28px;color:#8b949e}
-#zoomLbl{min-width:42px;text-align:center;font-size:12px;font-weight:800;color:#58A6FF;font-family:monospace}
+#zoomLbl{min-width:42px;text-align:center;font-size:12px;font-weight:800;color:#58A6FF;font-family:monospace;cursor:move;padding:0 2px}
+/* 🔻 底部三欄垂直壓縮 ~70%（留黑·對齊·不變形）*/
+.bottom-bar > *{padding-top:6px !important;padding-bottom:6px !important}
+.bottom-bar .small-title{margin-bottom:4px !important}
+.bottom-bar .sm-lamp{gap:8px !important}
+.bottom-bar .sm-cell{padding:4px 4px !important}
+.bottom-bar .sm-cell-result{margin-top:2px !important}
+.bottom-bar .mom-status{padding:5px 9px !important;margin-top:5px !important}
+.bottom-bar .signal-stream{max-height:120px !important}
+.bottom-bar .signal-stream li{padding:4px 9px !important;margin-bottom:4px !important}
+.bottom-bar .smentry{padding:7px !important}
+.bottom-bar .smentry-head{padding-bottom:4px !important;margin-bottom:4px !important}
+.bottom-bar .sm-row{padding:2px 4px !important}
+.bottom-bar .smentry-divider{margin:3px 0 !important}
+.bottom-bar .smentry-rr{padding:2px 0 !important}
+.bottom-bar .smentry-cond{margin-top:4px !important}
+.bottom-bar .smentry-btn{padding-top:6px !important;padding-bottom:6px !important;margin-top:6px !important}
 </style>
 <script>
-// 🔍 畫面縮放：只套 .app（內容重排縮小→小螢幕多塞）；控制列獨立、彈窗/提示不受影響；與刷新引擎零交集
+// 🔍 縮放只套 .app；控制列可拖曳(存位置)；底部壓縮純 CSS；與刷新引擎零交集
 (function(){
-  var KEY='smc_zoom', MIN=0.5, MAX=1.3, STEP=0.1;
+  var ZKEY='smc_zoom', PKEY='smc_zoom_pos', MIN=0.5, MAX=1.3, STEP=0.1;
   function clampZ(v){ return Math.max(MIN, Math.min(MAX, Math.round(v*100)/100)); }
-  function getZ(){ var v=parseFloat(localStorage.getItem(KEY)); return (v && !isNaN(v))?clampZ(v):1; }
-  function applyZ(v){
-    var app=document.querySelector('.app'); if(app) app.style.zoom=v;
-    var lbl=document.getElementById('zoomLbl'); if(lbl) lbl.textContent=Math.round(v*100)+'%';
-  }
-  function setZ(v){ v=clampZ(v); try{ localStorage.setItem(KEY, String(v)); }catch(_){} applyZ(v); }
+  function getZ(){ var v=parseFloat(localStorage.getItem(ZKEY)); return (v&&!isNaN(v))?clampZ(v):1; }
+  function applyZ(v){ var app=document.querySelector('.app'); if(app) app.style.zoom=v; var l=document.getElementById('zoomLbl'); if(l) l.textContent=Math.round(v*100)+'%'; }
+  function setZ(v){ v=clampZ(v); try{ localStorage.setItem(ZKEY,String(v)); }catch(_){} applyZ(v); }
+  function restorePos(ctl){ try{ var p=JSON.parse(localStorage.getItem(PKEY)||'null'); if(p&&typeof p.left==='number'){ ctl.style.left=p.left+'px'; ctl.style.top=p.top+'px'; ctl.style.right='auto'; ctl.style.bottom='auto'; ctl.style.transform='none'; } }catch(_){} }
   function wireZoom(){
+    var ctl=document.getElementById('zoomCtl');
     var i=document.getElementById('zoomIn'), o=document.getElementById('zoomOut'), r=document.getElementById('zoomReset');
-    if(i) i.addEventListener('click', function(){ setZ(getZ()+STEP); });
-    if(o) o.addEventListener('click', function(){ setZ(getZ()-STEP); });
-    if(r) r.addEventListener('click', function(){ setZ(1); });
-    applyZ(getZ());
+    if(i) i.addEventListener('click', function(){ if(ctl._drag) return; setZ(getZ()+STEP); });
+    if(o) o.addEventListener('click', function(){ if(ctl._drag) return; setZ(getZ()-STEP); });
+    if(r) r.addEventListener('click', function(){ if(ctl._drag) return; setZ(1); });
+    var sx,sy,ox,oy,down=false;
+    ctl.addEventListener('pointerdown', function(e){ down=true; ctl._drag=false; var rc=ctl.getBoundingClientRect(); sx=e.clientX; sy=e.clientY; ox=rc.left; oy=rc.top; });
+    window.addEventListener('pointermove', function(e){ if(!down) return; var dx=e.clientX-sx, dy=e.clientY-sy; if(!ctl._drag && (Math.abs(dx)+Math.abs(dy))>6) ctl._drag=true; if(ctl._drag){ var nl=Math.max(0,Math.min(window.innerWidth-ctl.offsetWidth, ox+dx)); var nt=Math.max(0,Math.min(window.innerHeight-ctl.offsetHeight, oy+dy)); ctl.style.left=nl+'px'; ctl.style.top=nt+'px'; ctl.style.right='auto'; ctl.style.bottom='auto'; ctl.style.transform='none'; } });
+    window.addEventListener('pointerup', function(){ if(!down) return; down=false; if(ctl._drag){ var rc=ctl.getBoundingClientRect(); try{ localStorage.setItem(PKEY, JSON.stringify({left:Math.round(rc.left),top:Math.round(rc.top)})); }catch(_){} setTimeout(function(){ ctl._drag=false; },0); } });
+    restorePos(ctl); applyZ(getZ());
   }
   try{ wireZoom(); }catch(e){}
 })();
