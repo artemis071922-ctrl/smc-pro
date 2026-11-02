@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.42.0 · 修K線塌掉(跨標的汙染)+高勝率卡訊號一致化</span></div>
+    <div class="logo">smc-pro<span class="v">v0.43.0 · 左側5欄分數接真(與排位卡一致)+紅空綠多圖例</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2943,6 +2943,10 @@ body {
         <div class="small-title">
           <span class="l">小單訊號流（今日）</span>
           <span class="r">7 筆</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin:-2px 0 5px;display:flex;gap:12px;align-items:center;letter-spacing:0.2px">
+          <span><span style="color:var(--red);font-weight:800">▼</span> 紅燈 = 做空</span>
+          <span><span style="color:var(--green);font-weight:800">▲</span> 綠燈 = 做多</span>
         </div>
         <ul class="signal-stream" id="signalStream">
           <li style="border-color: var(--red); background: rgba(248,81,73,0.06)"><span class="stime">15:15</span><span class="smodel">🎯 ⑪ Judas <span style="color:var(--red)">▼</span></span><span class="sscore high">78</span></li>
@@ -8167,8 +8171,16 @@ injectICTFlagshipGrid();
   function refreshRankCards(){
     if(typeof SYMS==='undefined') return;
     SYMS.forEach(function(s){
+      var r; try{ r=symbolResonance(s.k); }catch(_){ r=null; }
+      // ★左側「標的」5 欄分數接真（與排位卡同一引擎 → 分數一致；紅▼做空 綠▲做多）
+      var sr2=document.querySelector('.sym-row[data-sym="'+s.k+'"] .sym-score');
+      if(sr2){
+        if(!r||r.none||r.score==null){ sr2.innerHTML='<span style="color:#6e7681">監測</span>'; sr2.className='sym-score s-low'; }
+        else { var isS3=r.dir==='short', num3=(r.model||'').split(' ')[0];
+          sr2.className='sym-score '+(r.score>=75?'s-high':(r.score>=65?'s-mid':'s-low'));
+          sr2.innerHTML=num3+' '+r.score+' <span style="color:var(--'+(isS3?'red':'green')+')">'+(isS3?'▼':'▲')+'</span>'; }
+      }
       var card=document.querySelector('.rs-card[data-sym="'+s.k+'"]'); if(!card) return;
-      var r; try{ r=symbolResonance(s.k); }catch(_){ return; }
       var arrEl=card.querySelector('.rs-arrow'), scEl=card.querySelector('.rs-score'), ledEl=card.querySelector('.rs-led'), mdEl=card.querySelector('.rs-model'), fill=card.querySelector('.rs-fill');
       if(!r || r.none || r.score==null){
         if(scEl){ scEl.textContent='—'; scEl.className='rs-score s-low'; }
