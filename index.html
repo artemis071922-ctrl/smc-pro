@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.44.1 · 名次一致化(戰情室名次=排位條位置)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.45.0 · 決策指令列(現在該做什麼·帶你打單)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -8288,6 +8288,25 @@ injectICTFlagshipGrid();
   window.smcKbars=function(sym){ var k=sym||window.lastAdvisorSym||curSym(); try{ return detectKbars((window.CANDLES&&window.CANDLES[k])||[]); }catch(_){ return []; } };
   window.smcHarm =function(sym){ var k=sym||window.lastAdvisorSym||curSym(); try{ return detectHarmonic((window.CANDLES&&window.CANDLES[k])||[]); }catch(_){ return []; } };
 
+  // ▶ 決策指令列：一行大字告訴 Artemis 當下該做什麼（KZ→排位#1→分數→主倉/小卡）
+  function renderDecisionBar(){
+    var wr=document.getElementById('warroom'); if(!wr) return;
+    var bar=document.querySelector('#decisionBar');   // querySelector 不會被 monkeypatch 自動建 stub
+    if(!bar){ bar=document.createElement('div'); bar.id='decisionBar';
+      bar.style.cssText='padding:7px 13px;border-radius:7px;border:1px solid;font-size:13px;margin:0 8px 7px;display:flex;align-items:center;gap:9px;line-height:1.3;font-weight:800';
+      wr.insertBefore(bar, wr.firstChild); }
+    var inKz=false; try{ inKz=kzActive(); }catch(_){}
+    var top=null; try{ for(var i=0;i<SYMS.length;i++){ var r=window.SYMRESO&&window.SYMRESO[SYMS[i].k]; if(r&&!r.none&&r.score!=null){ if(!top||r.score>top.score){ top=r; top._sym=SYMS[i].k; } } } }catch(_){}
+    var txt,bg,col;
+    if(!inKz){ txt='🔴 時段外 · 休息，別打單（只在 KZ 時段交易）'; bg='rgba(248,81,73,.12)'; col='#ff8b7e'; }
+    else if(!top){ txt='🟡 KZ 內 · 全市場掃描中 · 目前無有效訊號 · 等'; bg='rgba(210,153,34,.12)'; col='#e3b341'; }
+    else if(top.score>=75){ var trg=top.trig&&top.trig.triggered; txt='🟢 可打主倉 → '+top._sym+' 高勝率 '+top.score+' 分 · 共振'+top.fired+'/4 · '+(trg?'已觸發，進戰情室確認七條件':'等掃蕩+MSS 觸發'); bg='rgba(63,185,80,.15)'; col='#7ee787'; }
+    else if(top.score>=65){ txt='⚡ 可打小卡 → '+top._sym+' '+top.score+' 分 · 共振'+top.fired+'/4 庫 · 短打 1R（緊止損）'; bg='rgba(240,185,11,.15)'; col='#F0B90B'; }
+    else { txt='🟡 KZ 內 · 掃描中 · 最高 '+top.score+' 分（'+top._sym+'）· <65 觀望，等更強訊號'; bg='rgba(210,153,34,.10)'; col='#e3b341'; }
+    bar.innerHTML='<span style="font-size:10px;opacity:.65;letter-spacing:1px;flex-shrink:0">▶ 現在該做</span><span>'+txt+'</span>';
+    bar.style.background=bg; bar.style.color=col; bar.style.borderColor=col;
+  }
+
   function refreshAdvisorSmall(){
     if(typeof SYMS==='undefined'||typeof RANK_DB==='undefined') return;
     var scan=[];
@@ -8327,6 +8346,7 @@ injectICTFlagshipGrid();
         if(subEl) subEl.textContent=wrK2+' · 等結構成形 / 位置到折扣·溢價';
       }
     })();
+    try{ renderDecisionBar(); }catch(_){}
     if(!scan.length) return;
     scan.sort(function(a,b){ return b.score-a.score; });
     // 軍師卡 = 全市場最高分
