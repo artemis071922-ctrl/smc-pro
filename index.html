@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.46.0 · 三卡聚焦同標的(不打架)+狀態燈+精緻按鈕</span></div>
+    <div class="logo">smc-pro<span class="v">v0.47.0 · 主視覺(決策列放大)+可打卡發光+動能圖例</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2927,14 +2927,18 @@ body {
             <div class="sm-cell-result green">看漲配合 ✓</div>
           </div>
         </div>
+        <div style="font-size:10px;color:var(--text-dim);margin:5px 0 3px;display:flex;gap:12px;align-items:center;letter-spacing:.2px">
+          <span><span style="color:var(--green);font-weight:900">●</span> 綠燈 = 動能配合方向</span>
+          <span><span style="color:var(--red);font-weight:900">●</span> 紅燈 = 不配合</span>
+        </div>
         <div class="mom-status go" id="momStatus">
           ▶ 三燈全綠 · 看漲動能成立 · XRP 小單可發
         </div>
         <div style="margin-top:8px;font-size:11px;color:var(--text-dim);line-height:1.6">
-          <div>• 獨立小單訊號 · 與高勝率不同步</div>
+          <div>• 小單＝聚焦標的的短打版（與主倉同標的）</div>
           <div>• SL 邏輯：5M 結構低（緊止損）</div>
           <div>• TP 邏輯：1R 平 100%（無分批）</div>
-          <div>• 時效：2 分鐘短窗</div>
+          <div>• 三燈全綠＝動能到位，配合共振才發</div>
         </div>
       </div>
 
@@ -3059,6 +3063,12 @@ body {
 .card-status-led[data-s="off"]{color:#9aa4ae;background:rgba(139,148,158,.1);border-color:rgba(139,148,158,.35)}
 .card-status-led[data-s="exp"]{color:#ff8b7e;background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.45)}
 @keyframes cslPulse{0%,100%{box-shadow:0 0 16px rgba(63,185,80,.5)}50%{box-shadow:0 0 26px rgba(63,185,80,.8)}}
+/* 🎯 主視覺：決策指令列放大(頭號焦點) */
+#decisionBar{font-size:15px !important;padding:10px 15px !important;box-shadow:0 2px 14px rgba(0,0,0,.35);border-width:1.5px !important}
+/* 👁 視覺動向：哪張卡「可打」就發光，一眼知道點哪 */
+#highEntryCard:has(.card-status-led[data-s="go"]),.smentry:has(.card-status-led[data-s="go"]),#advisor:has(.card-status-led[data-s="go"]){box-shadow:0 0 0 2px rgba(63,185,80,.55),0 0 24px rgba(63,185,80,.4) !important;border-color:#3fb950 !important;transition:box-shadow .3s ease}
+/* 非可打的卡稍微退後(降低干擾·讓主視覺更清楚) */
+#highEntryCard:has(.card-status-led[data-s="off"]),.smentry:has(.card-status-led[data-s="off"]),#advisor:has(.card-status-led[data-s="off"]){opacity:.72}
 /* ⚡ 精緻按鈕（保留原色·加深度/懸停/按壓）*/
 .card-execute-btn,.smentry-btn,.btn.adv-execute,.rs-exec{border-radius:9px !important;box-shadow:0 2px 0 rgba(0,0,0,.22),0 6px 16px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.2) !important;transition:transform .12s ease,box-shadow .12s ease,filter .12s ease !important;letter-spacing:.4px}
 .card-execute-btn:hover,.smentry-btn:hover,.btn.adv-execute:hover,.rs-exec:hover{filter:brightness(1.09) saturate(1.05);transform:translateY(-1px);box-shadow:0 4px 0 rgba(0,0,0,.22),0 10px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.28) !important}
