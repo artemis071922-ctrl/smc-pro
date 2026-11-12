@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.48.0 · 右側三卡改角色標籤(主倉進場/七條件體檢/短打)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.49.0 · 新增📅盈虧日曆(手動補登·之後接OKX)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -2443,6 +2443,7 @@ body {
     <button class="btn" onclick="resetSignal()">⟳ 重置</button>
     <button class="btn" id="soundToggleBtn" onclick="toggleSound()" title="切換鈴聲開關" style="min-width:38px; padding:6px 10px">🔔</button>
     <button class="btn" onclick="openRecapPanel()" title="今日復盤" style="background:rgba(63,185,80,0.15); border-color:var(--green); color:var(--green); font-weight:700">📜 復盤</button>
+    <button class="btn" onclick="openPnlCalendar()" title="盈虧日曆" style="background:rgba(210,153,34,0.15); border-color:var(--amber); color:var(--amber); font-weight:700">📅 日曆</button>
   </header>
 
   <!-- ★ v0.17 七條件內建燈號條（取代下方 LED + 全過 banner）★ -->
@@ -8464,5 +8465,204 @@ injectICTFlagshipGrid();
 })();
 </script>
 
+<!-- ═══════════ 📅 盈虧日曆（手動補登版 v1 · 之後接 OKX 唯讀）═══════════ -->
+<style id="pnlcal-style">
+.pcal-backdrop{position:fixed;inset:0;z-index:9000;background:rgba(5,8,12,0.72);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:34px 16px;overflow-y:auto;animation:pcalFade .18s ease}
+@keyframes pcalFade{from{opacity:0}to{opacity:1}}
+.pcal{width:100%;max-width:780px;background:var(--bg-2);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.03) inset;overflow:hidden;animation:pcalRise .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes pcalRise{from{transform:translateY(14px);opacity:.4}to{transform:translateY(0);opacity:1}}
+.pcal-head{display:flex;align-items:center;gap:12px;padding:15px 18px;background:linear-gradient(135deg,rgba(63,185,80,.16),rgba(63,185,80,.02));border-bottom:1px solid var(--border)}
+.pcal-title{font-size:16px;font-weight:900;color:var(--green);letter-spacing:.3px;display:flex;align-items:center;gap:8px}
+.pcal-nav{display:flex;align-items:center;gap:6px;margin-left:auto}
+.pcal-nav button{width:30px;height:30px;border-radius:8px;background:var(--bg-3);border:1px solid var(--border);color:var(--text-mid);font-size:15px;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
+.pcal-nav button:hover{background:var(--bg-4);color:var(--text);border-color:var(--green)}
+.pcal-ym{font-family:var(--font-mono);font-weight:800;font-size:15px;color:var(--text);min-width:112px;text-align:center}
+.pcal-close{width:30px;height:30px;border-radius:8px;background:var(--bg-3);border:1px solid var(--border);color:var(--text-dim);font-size:15px;cursor:pointer;transition:.15s}
+.pcal-close:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.pcal-body{padding:16px 18px}
+.pcal-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:15px}
+.pcal-stat{background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:10px 11px;position:relative;overflow:hidden}
+.pcal-stat .k{font-size:10.5px;color:var(--text-dim);letter-spacing:.3px;margin-bottom:5px;font-weight:600}
+.pcal-stat .val{font-family:var(--font-mono);font-size:20px;font-weight:900;line-height:1;letter-spacing:-.5px}
+.pcal-stat .sub{font-size:10px;color:var(--text-dim);margin-top:4px}
+.pcal-stat.gate{border-color:rgba(210,153,34,.4);background:linear-gradient(180deg,rgba(210,153,34,.08),var(--bg-3))}
+.pcal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.pcal-dow span{text-align:center;font-size:11px;font-weight:700;color:var(--text-dim);padding:2px 0}
+.pcal-dow span.we{color:#6b7686}
+.pcal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.pcal-cell{aspect-ratio:1/1;border-radius:10px;background:var(--bg-3);border:1px solid var(--border);padding:6px 7px;display:flex;flex-direction:column;cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s;position:relative;min-height:56px}
+.pcal-cell:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.35)}
+.pcal-cell.empty{background:transparent;border-color:transparent;cursor:default}
+.pcal-cell.empty:hover{transform:none;box-shadow:none}
+.pcal-cell.out{opacity:.32}
+.pcal-cell.today{border-color:var(--cyan)!important;box-shadow:0 0 0 1px var(--cyan)}
+.pcal-cell.sel{outline:2px solid var(--green);outline-offset:1px}
+.pcal-cell .dn{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text-mid)}
+.pcal-cell.win .dn,.pcal-cell.loss .dn{color:var(--text)}
+.pcal-cell .pl{margin-top:auto;font-family:var(--font-mono);font-weight:900;font-size:12.5px;letter-spacing:-.3px;line-height:1.1}
+.pcal-cell .ct{font-size:9.5px;color:var(--text-dim);margin-top:2px}
+.pcal-cell.win{border-color:rgba(63,185,80,.5)}
+.pcal-cell.win .pl{color:var(--green)}
+.pcal-cell.loss{border-color:rgba(248,81,73,.5)}
+.pcal-cell.loss .pl{color:var(--red)}
+.pcal-best{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:var(--text-dim);flex-wrap:wrap}
+.pcal-best b{font-family:var(--font-mono);font-weight:800}
+.pcal-toolbar{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.pcal-toolbar .btn{padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg-3);color:var(--text-mid);font-weight:700;transition:.15s}
+.pcal-toolbar .btn:hover{background:var(--bg-4);color:var(--text)}
+.pcal-toolbar .btn.add{background:linear-gradient(180deg,#4fd163,var(--green));color:#05140a;border-color:var(--green);box-shadow:0 2px 10px rgba(63,185,80,.3)}
+.pcal-form{margin-top:13px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px;display:none}
+.pcal-form.open{display:block;animation:pcalFade .15s ease}
+.pcal-form .row{display:grid;grid-template-columns:1.1fr 1fr 1fr 1fr;gap:9px;margin-bottom:9px}
+.pcal-form label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--text-dim);font-weight:600}
+.pcal-form input,.pcal-form select{background:var(--bg-3);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 8px;font-size:13px;font-family:var(--font-mono);outline:none}
+.pcal-form input:focus,.pcal-form select:focus{border-color:var(--green)}
+.pcal-form .full{grid-template-columns:1fr;margin-bottom:9px}
+.pcal-form .acts{display:flex;gap:8px;justify-content:flex-end}
+.pcal-form .acts .btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;border:1px solid var(--border)}
+.pcal-form .acts .save{background:linear-gradient(180deg,#4fd163,var(--green));color:#05140a;border-color:var(--green)}
+.pcal-form .acts .cancel{background:var(--bg-3);color:var(--text-dim)}
+.pcal-detail{margin-top:13px;border-top:1px dashed var(--border);padding-top:12px}
+.pcal-detail-h{font-size:12.5px;font-weight:800;color:var(--text);margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.pcal-detail-h .net{font-family:var(--font-mono);margin-left:auto}
+.pcal-trade{display:flex;align-items:center;gap:10px;background:var(--bg-3);border:1px solid var(--border);border-radius:9px;padding:8px 11px;margin-bottom:7px}
+.pcal-trade .sd{font-family:var(--font-mono);font-weight:800;font-size:12px;min-width:46px}
+.pcal-trade .sd.long{color:var(--green)}.pcal-trade .sd.short{color:var(--red)}
+.pcal-trade .sym{font-weight:800;font-size:13px;color:var(--text)}
+.pcal-trade .rr{font-size:11px;color:var(--text-dim);font-family:var(--font-mono)}
+.pcal-trade .note{font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.pcal-trade .amt{font-family:var(--font-mono);font-weight:900;font-size:14px;margin-left:auto}
+.pcal-trade .del{width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:12px}
+.pcal-trade .del:hover{background:var(--red);color:#fff;border-color:var(--red)}
+.pcal-empty{text-align:center;padding:22px;color:var(--text-dim);font-size:12.5px}
+</style>
+<script>
+(function(){
+  var PJ_KEY='smcpro_pnl_journal_v1';
+  function readJ(){ try{ return JSON.parse(localStorage.getItem(PJ_KEY)||'[]'); }catch(_){ return []; } }
+  function writeJ(a){ try{ localStorage.setItem(PJ_KEY, JSON.stringify(a)); }catch(_){} }
+  function _toast(m,t){ if(typeof window.showToast==='function') window.showToast(m,t||'normal'); }
+  function pad(n){ return (n<10?'0':'')+n; }
+  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function fmt(n){ var s=(n>0?'+':'')+ (Math.round(n*100)/100); return s; }
+  // state
+  var S={y:0,m:0,sel:null,form:false};
+  var BD=null; // 直接持有彈窗節點，避開本專案 monkeypatch 過的 getElementById(會回傳隱藏 stub)
+  function q(id){ return BD?BD.querySelector('#'+id):null; }
+  function monthEntries(all,y,m){ var p=y+'-'+pad(m+1); return all.filter(function(e){return e.date&&e.date.indexOf(p+'-')===0;}); }
+  function dayEntries(all,ds){ return all.filter(function(e){return e.date===ds;}); }
+  function agg(list){ var net=0,w=0,l=0,days={}; list.forEach(function(e){ net+=(+e.pnl||0); if((+e.pnl)>0)w++; else if((+e.pnl)<0)l++; days[e.date]=(days[e.date]||0)+(+e.pnl||0); }); return {net:net,wins:w,losses:l,trades:list.length,days:days}; }
+  function streak(all){ var byM={}; all.forEach(function(e){ var k=e.date.slice(0,7); byM[k]=(byM[k]||0)+(+e.pnl||0); }); var keys=Object.keys(byM).sort(); var s=0; for(var i=keys.length-1;i>=0;i--){ if(byM[keys[i]]>0)s++; else break; } return s; }
+
+  window.openPnlCalendar=function(){ var d=new Date(); if(!S.y){ S.y=d.getFullYear(); S.m=d.getMonth(); S.sel=todayStr(); } render(); };
+  window.closePnlCal=function(){ if(BD){ BD.remove(); BD=null; } };
+  window.pcPrev=function(){ S.m--; if(S.m<0){S.m=11;S.y--;} S.sel=null; render(); };
+  window.pcNext=function(){ S.m++; if(S.m>11){S.m=0;S.y++;} S.sel=null; render(); };
+  window.pcToday=function(){ var d=new Date(); S.y=d.getFullYear(); S.m=d.getMonth(); S.sel=todayStr(); render(); };
+  window.pcSelDay=function(ds){ S.sel=(S.sel===ds?null:ds); render(); };
+  window.pcToggleForm=function(){ S.form=!S.form; render(); };
+  window.pcSave=function(){
+    var ds=(q('pcDate')||{}).value||todayStr();
+    var sym=((q('pcSym')||{}).value||'BTC').trim().toUpperCase();
+    var side=(q('pcSide')||{}).value||'long';
+    var pnlRaw=(q('pcPnl')||{}).value;
+    var r=(q('pcR')||{}).value;
+    var note=((q('pcNote')||{}).value||'').trim();
+    if(pnlRaw===''||isNaN(+pnlRaw)){ _toast('請填盈虧金額（USDT，賠填負數）','warn'); return; }
+    var all=readJ();
+    all.push({ id:'pj'+Date.now()+Math.floor(Math.random()*1000), date:ds, sym:sym, side:side, pnl:+pnlRaw, rr:(r===''?null:+r), note:note, ts:Date.now(), source:'manual' });
+    writeJ(all); S.sel=ds; S.form=false; var p=ds.slice(0,7).split('-'); S.y=+p[0]; S.m=+p[1]-1;
+    _toast('✅ 已記一筆：'+sym+' '+fmt(+pnlRaw)+'U','normal'); render();
+  };
+  window.pcDel=function(id){ var all=readJ().filter(function(e){return e.id!==id;}); writeJ(all); _toast('已刪除一筆','normal'); render(); };
+  window.pcExport=function(){
+    var all=readJ(); if(!all.length){ _toast('尚無記錄可匯出','warn'); return; }
+    var head='date,symbol,side,pnl_usdt,rr,result,note,source\n';
+    var body=all.slice().sort(function(a,b){return a.date<b.date?-1:1;}).map(function(e){
+      var res=(+e.pnl>0?'win':(+e.pnl<0?'loss':'be'));
+      return [e.date,e.sym,e.side,e.pnl,(e.rr==null?'':e.rr),res,'"'+(e.note||'').replace(/"/g,'""')+'"',e.source||'manual'].join(',');
+    }).join('\n');
+    var blob=new Blob([head+body],{type:'text/csv;charset=utf-8'}); var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download='smc-pnl-journal-'+todayStr()+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000); _toast('💾 已匯出 CSV（'+all.length+' 筆）','normal');
+  };
+
+  function cell(dn,ds,net,ct,isToday,isSel){
+    var cls='pcal-cell'+(net>0?' win':(net<0?' loss':''))+(isToday?' today':'')+(isSel?' sel':'');
+    var tint=''; if(net!==0&&ct>0){ var c=net>0?'63,185,80':'248,81,73'; tint='background:rgba('+c+',0.10);'; }
+    var pl= ct>0 ? '<div class="pl">'+fmt(net)+'</div><div class="ct">'+ct+' 筆</div>' : '';
+    return '<div class="'+cls+'" style="'+tint+'" onclick="pcSelDay(\''+ds+'\')"><div class="dn">'+dn+'</div>'+pl+'</div>';
+  }
+
+  function render(){
+    var all=readJ();
+    var me=monthEntries(all,S.y,S.m); var a=agg(me);
+    var wr=(a.wins+a.losses)>0? Math.round(a.wins/(a.wins+a.losses)*100):null;
+    var tradingDays=Object.keys(a.days).length;
+    var stk=streak(all);
+    // best / worst day
+    var best=null,worst=null; Object.keys(a.days).forEach(function(d){ var v=a.days[d]; if(best===null||v>a.days[best])best=d; if(worst===null||v<a.days[worst])worst=d; });
+    var netColor=a.net>0?'var(--green)':(a.net<0?'var(--red)':'var(--text-mid)');
+
+    var first=new Date(S.y,S.m,1); var lead=first.getDay(); var dim=new Date(S.y,S.m+1,0).getDate();
+    var tds=todayStr();
+    var cells='';
+    for(var i=0;i<lead;i++) cells+='<div class="pcal-cell empty"></div>';
+    for(var d=1;d<=dim;d++){ var ds=S.y+'-'+pad(S.m+1)+'-'+pad(d); var dn=a.days[ds]; var ct=dayEntries(me,ds).length; cells+=cell(d,ds,dn||0,ct,ds===tds,ds===S.sel); }
+
+    var dow=['日','一','二','三','四','五','六'].map(function(x,i){return '<span class="'+((i===0||i===6)?'we':'')+'">'+x+'</span>';}).join('');
+
+    // detail
+    var detail='';
+    if(S.sel){ var de=dayEntries(all,S.sel).sort(function(x,y){return x.ts-y.ts;}); var dnet=de.reduce(function(s,e){return s+(+e.pnl||0);},0);
+      var dh='<div class="pcal-detail-h">📌 '+S.sel+' <span class="net" style="color:'+(dnet>0?'var(--green)':(dnet<0?'var(--red)':'var(--text-mid)'))+'">'+fmt(dnet)+' U</span></div>';
+      var rows = de.length? de.map(function(e){
+        var res=+e.pnl>0?'var(--green)':(+e.pnl<0?'var(--red)':'var(--text-mid)');
+        return '<div class="pcal-trade"><span class="sd '+e.side+'">'+(e.side==='short'?'▼空':'▲多')+'</span><span class="sym">'+e.sym+'</span>'+(e.rr!=null?'<span class="rr">'+e.rr+'R</span>':'')+'<span class="note">'+(e.note||'')+'</span><span class="amt" style="color:'+res+'">'+fmt(+e.pnl)+'</span><button class="del" onclick="pcDel(\''+e.id+'\')" title="刪除">✕</button></div>';
+      }).join('') : '<div class="pcal-empty">這天還沒有記錄 — 按「＋ 記一筆」補登</div>';
+      detail='<div class="pcal-detail">'+dh+rows+'</div>';
+    }
+
+    var form=''+
+      '<div class="pcal-form'+(S.form?' open':'')+'" id="pcForm">'+
+        '<div class="row">'+
+          '<label>日期<input type="date" id="pcDate" value="'+(S.sel||tds)+'"></label>'+
+          '<label>幣種<input type="text" id="pcSym" value="BTC" placeholder="BTC"></label>'+
+          '<label>方向<select id="pcSide"><option value="long">▲ 做多</option><option value="short">▼ 做空</option></select></label>'+
+          '<label>R:R（選填）<input type="number" id="pcR" step="0.1" placeholder="2.0"></label>'+
+        '</div>'+
+        '<div class="row full"><label>盈虧（USDT，賠填負數）<input type="number" id="pcPnl" step="0.01" placeholder="例：+15.5 或 -8"></label></div>'+
+        '<div class="row full"><label>備註（選填）<input type="text" id="pcNote" placeholder="例：⑪ 倫敦Judas · OB回踩 · 守紀律"></label></div>'+
+        '<div class="acts"><button class="btn cancel" onclick="pcToggleForm()">取消</button><button class="btn save" onclick="pcSave()">✅ 存入日曆</button></div>'+
+      '</div>';
+
+    var html=''+
+      '<div class="pcal" onclick="event.stopPropagation()">'+
+        '<div class="pcal-head">'+
+          '<div class="pcal-title">📅 盈虧日曆 <span style="font-size:10px;color:var(--text-dim);font-weight:600">手動補登 · 之後接OKX</span></div>'+
+          '<div class="pcal-nav"><button onclick="pcPrev()">‹</button><span class="pcal-ym">'+S.y+' / '+pad(S.m+1)+'</span><button onclick="pcNext()">›</button><button onclick="pcToday()" title="回本月" style="font-size:11px">今</button></div>'+
+          '<button class="pcal-close" onclick="closePnlCal()">✕</button>'+
+        '</div>'+
+        '<div class="pcal-body">'+
+          '<div class="pcal-stats">'+
+            '<div class="pcal-stat"><div class="k">當月淨損益</div><div class="val" style="color:'+netColor+'">'+fmt(a.net)+'</div><div class="sub">USDT</div></div>'+
+            '<div class="pcal-stat"><div class="k">當月勝率</div><div class="val" style="color:var(--text)">'+(wr===null?'—':wr+'%')+'</div><div class="sub">'+a.wins+'勝 / '+a.losses+'敗</div></div>'+
+            '<div class="pcal-stat"><div class="k">交易</div><div class="val" style="color:var(--text)">'+a.trades+'</div><div class="sub">'+tradingDays+' 個交易日</div></div>'+
+            '<div class="pcal-stat gate"><div class="k">連續正數月 🎯GATE</div><div class="val" style="color:var(--amber)">'+stk+'</div><div class="sub">目標 ≥3 月</div></div>'+
+          '</div>'+
+          '<div class="pcal-dow">'+dow+'</div>'+
+          '<div class="pcal-grid">'+cells+'</div>'+
+          (tradingDays? '<div class="pcal-best">本月最佳日：<b style="color:var(--green)">'+(best?best.slice(5)+' '+fmt(a.days[best]):'—')+'</b>　最差日：<b style="color:var(--red)">'+(worst?worst.slice(5)+' '+fmt(a.days[worst]):'—')+'</b></div>' : '')+
+          '<div class="pcal-toolbar"><button class="btn add" onclick="pcToggleForm()">＋ 記一筆</button><button class="btn" onclick="pcExport()">💾 匯出 CSV</button></div>'+
+          form+
+          detail+
+        '</div>'+
+      '</div>';
+
+    if(!BD || !document.body.contains(BD)){ BD=document.createElement('div'); BD.id='pcalBackdrop'; BD.className='pcal-backdrop'; BD.onclick=window.closePnlCal; document.body.appendChild(BD); }
+    BD.innerHTML=html;
+  }
+})();
+</script>
 </body>
 </html>
