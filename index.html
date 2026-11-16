@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.49.0 · 新增📅盈虧日曆(手動補登·之後接OKX)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.49.1 · 高勝率卡監測中清「—」(三卡統一)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7758,8 +7758,10 @@ injectICTFlagshipGrid();
         if(t1) t1.textContent=fmtPx(src.tp,symDp(wrK));
         if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
       } else {
-        if(e) e.textContent=EX; if(s) s.textContent=EX;
-        if(t1) t1.textContent=EX; if(t2) t2.textContent=EX; if(t3) t3.textContent=EX;
+        // ★統一三卡：監測中(無真setup)→ 價位清成「—」，不再掛範例數字(對齊軍師卡/小單卡)
+        var DASH='—';
+        if(e) e.textContent=DASH; if(s) s.textContent=DASH;
+        if(t1) t1.textContent=DASH; if(t2) t2.textContent=DASH; if(t3) t3.textContent=DASH;
       }
     }
     // ★修「訊號對不上」：高勝率卡的表頭/方向/分數/按鈕 全部跟戰情室同一標的（取代事件式殘留）
