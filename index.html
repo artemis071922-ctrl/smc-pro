@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.50.0 · ICT 統一結構規格 (JS↔Pine 呼應)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.51.0 · 順序式觸發 + ⑥ 停損≥0.4%</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -6221,7 +6221,7 @@ function qStateConditions() {
   return `七條件當前狀態（${d.sym}）：<br>① KZ：✓ 在 LOKZ 內<br>② 偏向：✓ HTF 三時框共振<br>③ 位置：✓ 在${d.side==='short'?'溢價':'折扣'}區<br>④ 分數：${d.score>=75?'✓':'✗'} ${d.score} 分<br>⑤ OB：✓ 已識別<br>⑥ SL：✓ OB 結構外<br>⑦ R:R：✓ 至 TP2 = 5.6:1<br><br>${d.score>=75?'🎯 <b>七條件全過 · 可進場</b>':'⚠️ 分數不足 · 觀望'}`;
 }
 
-function qRule7() { return '<b>七條件進場規則：</b><br>① 在 KZ 內（LOKZ / NYKZ）<br>② HTF 偏向明確<br>③ 折扣/溢價位置正確<br>④ 高勝率 ≥ 75、小單 ≥ 65<br>⑤ OB 確認<br>⑥ SL 設在 OB 結構外<br>⑦ R:R 至 TP2 ≥ 2<br><br>缺一不可。任何一項硬否決 (VWAP / Taker) → 直接不發。'; }
+function qRule7() { return '<b>七條件進場規則：</b><br>① 在 KZ 內（LOKZ / NYKZ）<br>② HTF 偏向明確<br>③ 折扣/溢價位置正確<br>④ 高勝率 ≥ 75、小單 ≥ 65<br>⑤ OB 確認<br>⑥ SL 設在掃點/OB 結構外，且停損距離 ≥ 0.4%（太窄＝結構太小，跳過）<br>⑦ R:R 至 TP2 ≥ 2<br><br>觸發＝順序式：掃流動性 → MSS → 回到 OTE 62% 限價。<br>缺一不可。任何一項硬否決 (VWAP / Taker) → 直接不發。'; }
 function qRuleVeto() { return '<b>硬否決規則（與分數無關，直接過濾）：</b><br>• <b>Taker 反向</b>：57%+ Taker 與訊號相反 → 不發<br>• <b>VWAP 錯邊</b>：做空時價在 VWAP 下 / 做多時價在 VWAP 上 → 不發<br>• <b>OB 失效</b>：進場前 OB 被破壞 → 不發<br><br>硬否決 = 與機構對作 = 必賠。'; }
 function qRuleHighSmall() { return '<b>高勝率 vs 小單：</b><br><br>🎯 <b>高勝率（≥75 分）</b><br>• 時窗：5 分鐘<br>• SL：OB 結構（寬止損）<br>• TP：分批 TP1/2/3<br>• 目標：3R+ · PDL/PDH<br><br>⚡ <b>小單（65-74 分）</b><br>• 時窗：2 分鐘短窗<br>• SL：5M 結構（緊止損）<br>• TP：固定 1R 平倉<br>• 目標：快進快出'; }
 function qRuleVWAP() { return ICT_KB.VWAP; }
@@ -7305,8 +7305,78 @@ injectICTFlagshipGrid();
     if(d.evt) out.mss={type:d.evt.type,lvl:d.evt.p};
     return out;
   }
-  // 提議 setup：優先吃偵測到的圖卡層級（⑤→SL、⑬→進場），沒卡時才退回幾何
-  function proposeSetup(d, lv){
+  // v0.51 順序式觸發（ICT）：折扣掃低 → 24 根內 MSS/BOS 往上 → 新腿回到 OTE 62% 限價觸發（空單鏡像）
+  // 停損＝掃點外（腿長 3% 緩衝）、TP＝2R；⑥ 停損距離 ≥ SEQ_MIN_RISK 才算有效。
+  // 與 TV Pine「SMC訊號」v4 逐根同一套邏輯（結構核心＝ICT 統一規格 v1）。
+  var SEQ_MIN_RISK=0.004, SEQ_OTE=0.62, SEQ_ARM_BARS=24, SEQ_MSS_BARS=36;
+  window.SEQ_MIN_RISK=SEQ_MIN_RISK;
+  function seqReplay(cs){
+    var N=cs?cs.length:0, out={L:{stage:0},S:{stage:0},nFireL:0,nFireS:0,fh:0};
+    if(N<12) return out;
+    var jH=null,jHp=null,jL=null,jLp=null, evDone=false, lastEvBi=null, lastEvCode=0;
+    var L={stage:0}, S={stage:0};
+    for(var i=0;i<N;i++){
+      var c=cs[i], prevH=jH, prevL=jL, isPH=false, isPL=false;
+      if(i>=6){ var p=cs[i-3]; isPH=true; isPL=true;
+        for(var k=i-6;k<=i;k++){ if(k===i-3) continue; if(!(p.h>cs[k].h)) isPH=false; if(!(p.l<cs[k].l)) isPL=false; } }
+      if(isPH){ jHp=jH; jH=cs[i-3].h; }
+      if(isPL){ jLp=jL; jL=cs[i-3].l; }
+      var newP=isPH||isPL;
+      var bias=(jHp!=null&&jLp!=null)?((jH>jHp&&jL>jLp)?1:((jH<jHp&&jL<jLp)?-1:0)):0;
+      var br=function(x){ return (jH!=null&&x>jH)?1:((jL!=null&&x<jL)?-1:0); };
+      var rs=0, rsK=0;
+      if(newP){ var b2=i>=2?br(cs[i-2].c):0, b1=i>=1?br(cs[i-1].c):0, b0=br(c.c); rs=b2||b1||b0; rsK=b2?2:(b1?1:0); }
+      var hitNow=newP?rs:(!evDone?br(c.c):0);
+      evDone=newP?(rs!==0):(evDone||hitNow!==0);
+      var code0=hitNow===1?(bias===-1?2:1):(hitNow===-1?(bias===1?-2:-1):0);
+      var breakBi=i-rsK, dup=newP&&hitNow!==0&&breakBi===lastEvBi&&code0===lastEvCode;
+      var evt=dup?0:code0; if(evt!==0){ lastEvBi=breakBi; lastEvCode=code0; }
+      var rng=(jH!=null&&jL!=null)?jH-jL:null, pos=(rng!=null&&rng>0)?(c.c-jL)/rng:null;
+      var zone=pos==null?0:((pos<0||pos>1)?4:((pos>0.45&&pos<0.55)?2:(pos>=0.55?3:1)));
+      var swNow=(prevL!=null&&c.l<prevL&&c.c>prevL)?1:((prevH!=null&&c.h>prevH&&c.c<prevH)?-1:0);
+      // ── 做多 ──
+      if(L.stage===3){ if(c.l<=L.sl||c.h>=L.tp){ L={stage:0,done:(c.l<=L.sl?'sl':'tp')}; } }
+      if(swNow===1&&zone===1&&L.stage!==3){ L={stage:1,ext:c.l,armBar:i}; }
+      if(L.stage===1&&i-L.armBar>SEQ_ARM_BARS) L={stage:0};
+      var dL=L.stage===1&&evt>0&&swNow!==1;
+      if(dL){ L.stage=2; L.leg=c.h; L.mssBar=i; }
+      else if(L.stage===2){ L.leg=Math.max(L.leg,c.h); }
+      if(L.stage===2){ var rL=L.leg-L.ext; L.ote=L.leg-SEQ_OTE*rL; L.sl=L.ext-0.03*rL;
+        if(!dL&&c.l<=L.ote){ var fL=Math.min(c.o,L.ote), kL=fL-L.sl;
+          L.riskPct=kL/fL; L.riskOk=kL>0&&L.riskPct>=SEQ_MIN_RISK;
+          if(L.riskOk){ L.stage=3; L.fill=fL; L.tp=fL+2*kL; L.fireBar=i; out.nFireL++; out.fh=(out.fh*31+i%997+1)%1000003;
+            if(c.l<=L.sl) L={stage:0,done:'sl'}; } } }
+      if(L.stage===2&&(c.c<=L.ext||i-L.mssBar>SEQ_MSS_BARS)) L={stage:0};
+      // ── 做空（鏡像）──
+      if(S.stage===3){ if(c.h>=S.sl||c.l<=S.tp){ S={stage:0,done:(c.h>=S.sl?'sl':'tp')}; } }
+      if(swNow===-1&&zone===3&&S.stage!==3){ S={stage:1,ext:c.h,armBar:i}; }
+      if(S.stage===1&&i-S.armBar>SEQ_ARM_BARS) S={stage:0};
+      var dS=S.stage===1&&evt<0&&swNow!==-1;
+      if(dS){ S.stage=2; S.leg=c.l; S.mssBar=i; }
+      else if(S.stage===2){ S.leg=Math.min(S.leg,c.l); }
+      if(S.stage===2){ var rS=S.ext-S.leg; S.ote=S.leg+SEQ_OTE*rS; S.sl=S.ext+0.03*rS;
+        if(!dS&&c.h>=S.ote){ var fS=Math.max(c.o,S.ote), kS=S.sl-fS;
+          S.riskPct=kS/fS; S.riskOk=kS>0&&S.riskPct>=SEQ_MIN_RISK;
+          if(S.riskOk){ S.stage=3; S.fill=fS; S.tp=fS-2*kS; S.fireBar=i; out.nFireS++; out.fh=(out.fh*31+i%997+501)%1000003;
+            if(c.h>=S.sl) S={stage:0,done:'sl'}; } } }
+      if(S.stage===2&&(c.c>=S.ext||i-S.mssBar>SEQ_MSS_BARS)) S={stage:0};
+    }
+    out.L=L; out.S=S; out.N=N; return out;
+  }
+  window.seqReplay=seqReplay;
+  // 提議 setup：順序式有進行中的腿就以它為準（v0.51）；否則吃偵測到的圖卡層級，沒卡時才退回幾何
+  function proposeSetup(d, lv, seq){
+    if(seq){
+      var A=null, ad=null;
+      if(seq.L.stage>=2) { A=seq.L; ad='long'; }
+      if(seq.S.stage>=2 && (!A || (seq.S.stage>A.stage) || (seq.S.stage===A.stage && (seq.S.mssBar||0)>(A.mssBar||0)))) { A=seq.S; ad='short'; }
+      if(A){
+        var en=A.stage===3?A.fill:A.ote, slv=A.sl, rk=Math.abs(en-slv), rp=en?rk/en:0;
+        if(!(rk>0) || rp<SEQ_MIN_RISK) return {none:true, seq:true, dir:ad, riskPct:rp, reason:'⑥ 停損距離 '+(rp*100).toFixed(2)+'% < '+(SEQ_MIN_RISK*100).toFixed(1)+'% · 結構太小，跳過'};
+        return {dir:ad, entry:en, sl:slv, tp:(ad==='long'?en+2*rk:en-2*rk), rr:2, pos:(d&&d.pos!=null)?d.pos:null,
+                slSrc:'⑤ 掃點外', enSrc:'OTE 62% 限價', seq:true, seqStage:A.stage, riskPct:rp, riskOk:true};
+      }
+    }
     if(!d || !(d.hi>d.lo) || d.pos==null) return {none:true,reason:'等區間成形'};
     var pos=d.pos;
     if(pos>1 || pos<0) return {none:true,reason:'突破區間 · 等新區間成形'};
@@ -7331,19 +7401,12 @@ injectICTFlagshipGrid();
     var risk=Math.abs(entry-sl), reward=Math.abs(tp-entry), rr=risk>0?reward/risk:null;
     return {dir:dir,entry:entry,sl:sl,tp:tp,rr:rr,pos:pos,slSrc:slSrc,enSrc:enSrc};
   }
-  // 狀態：🟡醞釀中(位置到了，未觸發) vs 🟢已觸發(掃高/低 ＋ MSS 確認)
-  function setupTrigger(cs, d, dir){
-    var pv=swingPivots(cs,3,3), N=cs.length;
-    var swept=false;
-    for(var i=Math.max(0,N-6);i<N;i++){
-      var sl0=sweepLevelAt(pv,i,3), rSH=sl0.H, rSL=sl0.L;
-      if(dir==='short' && rSH!=null && cs[i].h>rSH && cs[i].c<rSH) swept=true;
-      if(dir==='long'  && rSL!=null && cs[i].l<rSL && cs[i].c>rSL) swept=true;
-    }
-    var mss=false, conflict=false;
-    if(d.evt){ var dn=d.evt.type.indexOf('↓')>=0, up=d.evt.type.indexOf('↑')>=0;
-      if(dir==='short'){ mss=dn; conflict=up; } else { mss=up; conflict=dn; } }
-    return {triggered:(swept&&mss), swept:swept, mss:mss, conflict:conflict};
+  // 狀態（v0.51 順序式）：stage 0 等掃 → 1 已掃等 MSS → 2 已 MSS 等回 OTE → 3 🟢 已觸發（回到 OTE 且 ⑥ 停損距離達標）
+  function setupTrigger(cs, d, dir, seq){
+    var q=seq||seqReplay(cs), s=(dir==='short'?q.S:q.L)||{stage:0};
+    var o=(dir==='short'?q.L:q.S)||{stage:0};
+    return {triggered:s.stage===3, swept:s.stage>=1, mss:s.stage>=2, stage:s.stage,
+            conflict:(o.stage>=2 && s.stage<2), ote:s.ote, riskPct:s.riskPct, riskOk:s.riskOk};
   }
   window.smcL1Apply=function(){
     if(!lastProposal || lastProposal.none) return;
@@ -7518,19 +7581,26 @@ injectICTFlagshipGrid();
     var pos; if(d.pos==null)pos='—'; else if(d.pos<0||d.pos>1)pos='<b style="color:#d29922">突破區間</b>'; else { var zTxt=d.pos>=0.55?'溢價':(d.pos<=0.45?'折扣':'均衡'), zCol=d.pos>=0.55?'#f85149':(d.pos<=0.45?'#3fb950':'#8b949e'); pos='<b style="font-family:monospace">'+(d.pos*100).toFixed(0)+'% <span style="color:'+zCol+'">'+zTxt+'</span></b>'; }
     function row(l,v){ return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#8b949e">'+l+'</span>'+v+'</div>'; }
     var base=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
-    var lv=detectLevels(cs,d); var prop=proposeSetup(d,lv); lastProposal=prop;
+    var lv=detectLevels(cs,d); var seq=seqReplay(cs); var prop=proposeSetup(d,lv,seq); lastProposal=prop;
     var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
     var reso=computeResonance(prop,lv,ict,kb,hm,tl,kzActive()); window.lastResonance=reso;
     window.lastDetect={sym:curSym(), lv:lv, prop:prop, reso:reso, ict:ict, kb:kb, hm:hm, tl:tl};
+    try{ var _l6=document.querySelector('.cs-led[data-led="6"]'); if(_l6){ _l6.classList.remove('ok','fail','idle');
+      var _rp=(prop&&prop.riskPct!=null)?prop.riskPct:((prop&&!prop.none&&prop.entry)?Math.abs(prop.entry-prop.sl)/prop.entry:null);
+      if(_rp==null){ _l6.classList.add('idle'); _l6.title='⑥ 停損距離 · 等 setup'; }
+      else { var _ok=_rp>=SEQ_MIN_RISK; _l6.classList.add(_ok?'ok':'fail'); _l6.title='⑥ 停損距離 '+(_rp*100).toFixed(2)+'%（需 ≥ '+(SEQ_MIN_RISK*100).toFixed(1)+'%）'; } } }catch(_){}
     var ph='';
     if(!prop || prop.none){ ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#8b949e">💡 提議：<b style="color:#d29922">'+((prop&&prop.reason)||'等結構明朗')+'</b>（無明確 setup，不給假價）</div>'; }
     else {
-      var dirTxt=prop.dir==='short'?'<span style="color:#f85149">做空 ▼（溢價 '+(prop.pos*100).toFixed(0)+'%）</span>':'<span style="color:#3fb950">做多 ▲（折扣 '+(prop.pos*100).toFixed(0)+'%）</span>';
+      var _pz=prop.pos!=null?(prop.pos*100).toFixed(0)+'%':'—';
+      var dirTxt=prop.seq?(prop.dir==='short'?'<span style="color:#f85149">做空 ▼（順序式 · 已掃高＋MSS）</span>':'<span style="color:#3fb950">做多 ▲（順序式 · 已掃低＋MSS）</span>'):(prop.dir==='short'?'<span style="color:#f85149">做空 ▼（溢價 '+_pz+'）</span>':'<span style="color:#3fb950">做多 ▲（折扣 '+_pz+'）</span>');
       var rrCol=prop.rr==null?'#8b949e':(prop.rr>=2?'#3fb950':(prop.rr>=1.5?'#d29922':'#f85149'));
-      var trig=setupTrigger(cs,d,prop.dir);
+      var trig=setupTrigger(cs,d,prop.dir,seq);
       var hiLo=prop.dir==='short'?'高':'低';
       var stCol,stBg,stTxt,stNote;
-      if(trig.triggered){ stCol='#3fb950'; stBg='rgba(63,185,80,.14)'; stTxt='🟢 已觸發'; stNote='掃'+hiLo+'＋MSS 確認 · 可進，SL 貼掃'+hiLo+'點'; }
+      if(trig.triggered){ stCol='#3fb950'; stBg='rgba(63,185,80,.14)'; stTxt='🟢 已觸發'; stNote='掃'+hiLo+' → MSS → 回到 OTE 62% · 限價進場，SL 在掃'+hiLo+'點外，TP 2R'; }
+      else if(trig.mss){ stCol='#58A6FF'; stBg='rgba(31,111,235,.14)'; stTxt='🔵 等回 OTE'; stNote='已掃'+hiLo+'＋MSS · 限價掛 OTE 62% '+(trig.ote!=null?fmtPx(trig.ote,dp):'')+' 等回測，別追價'; }
+      else if(trig.swept){ stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote='已掃'+hiLo+' · 等 MSS 結構轉換確認（24 根內）'; }
       else if(trig.conflict){ stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote='⚠ 結構剛反向 · 當心，等重新確認再進'; }
       else { stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote=(prop.dir==='short'?'溢價':'折扣')+'位置到了，但還沒掃'+hiLo+'＋MSS · 別在區間中間進，等 🟢'; }
       var stBox='<div style="margin:2px 0 7px;padding:6px 9px;border-radius:6px;background:'+stBg+';border:1px solid '+stCol+'"><b style="color:'+stCol+';font-size:12px">'+stTxt+'</b> <span style="color:#8b949e;font-size:10px;font-family:monospace">掃'+hiLo+' '+(trig.swept?'✓':'—')+' · MSS '+(trig.mss?'✓':'—')+'</span><div style="color:#c9d1d9;font-size:10px;margin-top:2px">'+stNote+'</div></div>';
@@ -8136,9 +8206,9 @@ injectICTFlagshipGrid();
     while(i<N-2){
       var hist=cs.slice(0,i+1), d=detectStructure(hist);
       if(!d){ i++; continue; }
-      var lv=detectLevels(hist,d), prop=proposeSetup(d,lv);
+      var sq=seqReplay(hist), lv=detectLevels(hist,d), prop=proposeSetup(d,lv,sq);
       if(!prop||prop.none){ i++; continue; }
-      if(!setupTrigger(hist,d,prop.dir).triggered){ i++; continue; }
+      if(!setupTrigger(hist,d,prop.dir,sq).triggered){ i++; continue; }
       var reso=computeResonance(prop,lv,detectICTModels(hist),detectKbars(hist),detectHarmonic(hist),detectTrendline(hist),false);
       var src=((prop.slSrc&&prop.slSrc.indexOf('⑤')>=0)||(prop.enSrc&&prop.enSrc.indexOf('⑬')>=0))?'card':'geometry';
       var entry=prop.entry, sl=prop.sl, tp=prop.tp, dir=prop.dir, risk=Math.abs(entry-sl);
@@ -8197,12 +8267,12 @@ injectICTFlagshipGrid();
     var cs=(window.CANDLES&&window.CANDLES[k])||[];
     if(cs.length<20) return {none:true,reason:'K線不足'};
     var d; try{ d=detectStructure(cs); }catch(_){ return {none:true}; } if(!d) return {none:true,reason:'結構未成形'};
-    var lv=detectLevels(cs,d), prop=proposeSetup(d,lv);
+    var sq=seqReplay(cs), lv=detectLevels(cs,d), prop=proposeSetup(d,lv,sq);
     if(!prop||prop.none) return {none:true, reason:(prop&&prop.reason)||'等結構', pos:d.pos};
     var ict=detectICTModels(cs), kb=detectKbars(cs), hm=detectHarmonic(cs), tl=detectTrendline(cs);
     var inKz=kzActive();
     var reso=computeResonance(prop,lv,ict,kb,hm,tl,inKz);
-    var trig; try{ trig=setupTrigger(cs,d,prop.dir); }catch(_){ trig={triggered:false,swept:false,mss:false,conflict:false}; }
+    var trig; try{ trig=setupTrigger(cs,d,prop.dir,sq); }catch(_){ trig={triggered:false,swept:false,mss:false,conflict:false}; }
     var model = ict.length?(ict[0].num+' '+ict[0].name.split(' ')[0].split('/')[0]) : (kb.length?(kb[0].num+' '+kb[0].name) : (prop.dir==='short'?'溢價回撤':'折扣回撤'));
     var ch = prop.dir==='short' ? 'Ch5 · Ch11 · Ch13' : 'Ch10 · Ch13';
     var last=cs[cs.length-1];
