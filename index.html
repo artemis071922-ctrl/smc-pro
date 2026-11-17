@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.49.1 · 高勝率卡監測中清「—」(三卡統一)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.49.2 · KZ 補尾盤/精華段 (對齊 TV)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -3149,8 +3149,12 @@ const MODEL_LABELS = {
 function getKZ() {
   const d = new Date();
   const m = d.getHours()*60 + d.getMinutes();
+  // v0.49.2 對齊 TV Pine「SMC訊號」：補 尾盤 04:00–06:00、精華段 18:00–19:00 / 21:00–21:30（名稱含 KZ → 全系統視為 KZ 內）
+  if (m >= 240  && m < 360)  return { name: '尾盤KZ', end: 6*60 };
   if (m >= 600  && m < 780)  return { name: 'AKZ',  end: 13*60 };
   if (m >= 900  && m < 1080) return { name: 'LOKZ', end: 18*60 };
+  if (m >= 1080 && m < 1140) return { name: '精華KZ', end: 19*60 };
+  if (m >= 1260 && m < 1290) return { name: '精華KZ', end: 21*60+30 };
   if (m >= 1290 && m < 1440) return { name: 'NYKZ', end: 24*60 };
   return { name: '時段外', end: 0 };
 }
