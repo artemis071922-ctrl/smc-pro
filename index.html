@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.49.2 · KZ 補尾盤/精華段 (對齊 TV)</span></div>
+    <div class="logo">smc-pro<span class="v">v0.50.0 · ICT 統一結構規格 (JS↔Pine 呼應)</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7283,13 +7283,19 @@ injectICTFlagshipGrid();
   var lastProposal=null;
   // 提議由「位置」驅動（鐵律：位置優先於型態）：溢價→空、折扣→多、均衡/突破才等
   // 吃圖卡 · 庫1：抽出可綁的結構層級（⑤掃流動性點 / ⑬FVG缺口 / ④MSS）給 proposeSetup 用
+  // v0.50 ICT 統一規格（與 TV Pine SMC訊號 v3 共用）：掃流動性 = 穿過「該根之前已確認」的擺動高/低後收回
+  function sweepLevelAt(pv, i, R){
+    var H=null, L=null, k;
+    for(k=pv.H.length-1;k>=0;k--){ if(pv.H[k].i+R<=i-1){ H=pv.H[k].p; break; } }
+    for(k=pv.L.length-1;k>=0;k--){ if(pv.L[k].i+R<=i-1){ L=pv.L[k].p; break; } }
+    return {H:H, L:L};
+  }
   function detectLevels(cs, d){
     var out={sweep:null, fvg:null, mss:null};
     if(!cs || cs.length<12 || !d) return out;
     var pv=swingPivots(cs,3,3), N=cs.length;
-    var rSH=pv.H.length>1?pv.H[pv.H.length-2].p:(pv.H.length?pv.H[pv.H.length-1].p:null);
-    var rSL=pv.L.length>1?pv.L[pv.L.length-2].p:(pv.L.length?pv.L[pv.L.length-1].p:null);
     for(var i=Math.max(0,N-6);i<N;i++){
+      var sl0=sweepLevelAt(pv,i,3), rSH=sl0.H, rSL=sl0.L;
       if(rSH!=null && cs[i].h>rSH && cs[i].c<rSH) out.sweep={dir:'short',lvl:rSH,ext:cs[i].h};
       if(rSL!=null && cs[i].l<rSL && cs[i].c>rSL) out.sweep={dir:'long', lvl:rSL,ext:cs[i].l};
     }
@@ -7304,9 +7310,9 @@ injectICTFlagshipGrid();
     if(!d || !(d.hi>d.lo) || d.pos==null) return {none:true,reason:'等區間成形'};
     var pos=d.pos;
     if(pos>1 || pos<0) return {none:true,reason:'突破區間 · 等新區間成形'};
-    if(pos>0.4 && pos<0.6) return {none:true,reason:'均衡區 '+(pos*100).toFixed(0)+'% · 等回折扣/溢價'};
+    if(pos>0.45 && pos<0.55) return {none:true,reason:'均衡區 '+(pos*100).toFixed(0)+'% · 等回折扣/溢價'};
     var hi=d.hi, lo=d.lo, r=hi-lo, buf=r*0.03;
-    var dir=pos>=0.6?'short':'long', entry,sl,tp, slSrc, enSrc;
+    var dir=pos>=0.55?'short':'long', entry,sl,tp, slSrc, enSrc;
     if(dir==='short'){
       var oteLo=lo+0.62*r, oteHi=lo+0.79*r;
       if(lv && lv.sweep && lv.sweep.dir==='short'){ sl=(lv.sweep.ext||lv.sweep.lvl)+buf; slSrc='⑤ 掃高點外'; }
@@ -7328,10 +7334,9 @@ injectICTFlagshipGrid();
   // 狀態：🟡醞釀中(位置到了，未觸發) vs 🟢已觸發(掃高/低 ＋ MSS 確認)
   function setupTrigger(cs, d, dir){
     var pv=swingPivots(cs,3,3), N=cs.length;
-    var rSH=pv.H.length>1?pv.H[pv.H.length-2].p:(pv.H.length?pv.H[pv.H.length-1].p:null);
-    var rSL=pv.L.length>1?pv.L[pv.L.length-2].p:(pv.L.length?pv.L[pv.L.length-1].p:null);
     var swept=false;
     for(var i=Math.max(0,N-6);i<N;i++){
+      var sl0=sweepLevelAt(pv,i,3), rSH=sl0.H, rSL=sl0.L;
       if(dir==='short' && rSH!=null && cs[i].h>rSH && cs[i].c<rSH) swept=true;
       if(dir==='long'  && rSL!=null && cs[i].l<rSL && cs[i].c>rSL) swept=true;
     }
@@ -7364,10 +7369,9 @@ injectICTFlagshipGrid();
     var out=[]; if(!cs||cs.length<12) return out;
     var d=detectStructure(cs); if(!d) return out;
     var pv=swingPivots(cs,3,3), N=cs.length, inKz=kzActive();
-    var recentSH=pv.H.length>1?pv.H[pv.H.length-2].p:(pv.H.length?pv.H[pv.H.length-1].p:null);
-    var recentSL=pv.L.length>1?pv.L[pv.L.length-2].p:(pv.L.length?pv.L[pv.L.length-1].p:null);
     var sweep=null;
     for(var i=Math.max(0,N-6);i<N;i++){
+      var sl0=sweepLevelAt(pv,i,3), recentSH=sl0.H, recentSL=sl0.L;
       if(recentSH!=null && cs[i].h>recentSH && cs[i].c<recentSH) sweep={dir:'short',lvl:recentSH};
       if(recentSL!=null && cs[i].l<recentSL && cs[i].c>recentSL) sweep={dir:'long',lvl:recentSL};
     }
@@ -7511,7 +7515,7 @@ injectICTFlagshipGrid();
     var dp=symDp(k);
     var bias=d.bias==='bull'?'<b style="color:#3fb950">看漲 ▲</b>':(d.bias==='bear'?'<b style="color:#f85149">看跌 ▼</b>':'<b style="color:#8b949e">盤整 ◆</b>');
     var evt=d.evt?('<b style="font-family:monospace;color:'+(d.evt.type.indexOf("CHoCH")>=0?'#d29922':'#79c0ff')+'">'+d.evt.type+' @ '+fmtPx(d.evt.p,dp)+'</b>'):'<b style="color:#6e7681">—</b>';
-    var pos; if(d.pos==null)pos='—'; else if(d.pos<0||d.pos>1)pos='<b style="color:#d29922">突破區間</b>'; else { var pm=d.pos>=0.5; pos='<b style="font-family:monospace">'+(d.pos*100).toFixed(0)+'% <span style="color:'+(pm?'#f85149':'#3fb950')+'">'+(pm?'溢價':'折扣')+'</span></b>'; }
+    var pos; if(d.pos==null)pos='—'; else if(d.pos<0||d.pos>1)pos='<b style="color:#d29922">突破區間</b>'; else { var zTxt=d.pos>=0.55?'溢價':(d.pos<=0.45?'折扣':'均衡'), zCol=d.pos>=0.55?'#f85149':(d.pos<=0.45?'#3fb950':'#8b949e'); pos='<b style="font-family:monospace">'+(d.pos*100).toFixed(0)+'% <span style="color:'+zCol+'">'+zTxt+'</span></b>'; }
     function row(l,v){ return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:#8b949e">'+l+'</span>'+v+'</div>'; }
     var base=row('結構偏向',bias)+row('最近結構事件',evt)+row('區間','<b style="font-family:monospace;color:#c9d1d9">高 '+fmtPx(d.hi,dp)+' · 低 '+fmtPx(d.lo,dp)+' · EQ '+fmtPx(d.eq,dp)+'</b>')+row('現價位置',pos);
     var lv=detectLevels(cs,d); var prop=proposeSetup(d,lv); lastProposal=prop;
@@ -8269,7 +8273,7 @@ injectICTFlagshipGrid();
   function _hhmm(ms){ if(!ms) return '--:--'; var dt=new Date(ms); return ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2); }
   function _advConds(r){
     var c=[];
-    c.push({label:(r.pos>=0.6?'溢價區 '+(r.pos*100).toFixed(0)+'%（偏空）':(r.pos<=0.4?'折扣區 '+(r.pos*100).toFixed(0)+'%（偏多）':'均衡區 '+(r.pos*100).toFixed(0)+'%')), pass:(r.pos>=0.6||r.pos<=0.4)});
+    c.push({label:(r.pos>=0.55?'溢價區 '+(r.pos*100).toFixed(0)+'%（偏空）':(r.pos<=0.45?'折扣區 '+(r.pos*100).toFixed(0)+'%（偏多）':'均衡區 '+(r.pos*100).toFixed(0)+'%')), pass:(r.pos>=0.55||r.pos<=0.45)});
     c.push({label:'掃流動性 '+(r.slSrc||''), pass:!!(r.trig&&r.trig.swept)});
     c.push({label:'MSS 結構轉換確認', pass:!!(r.trig&&r.trig.mss)});
     c.push({label:'進場 '+(r.enSrc||'OTE'), pass:(r.enSrc||'').indexOf('FVG')>=0});
@@ -8277,7 +8281,7 @@ injectICTFlagshipGrid();
     c.push({label:'共振 '+r.score+' 分 '+(r.score>=75?'≥75 高勝率':(r.score>=65?'≥65 小單':'<65 觀望')), pass:r.score>=65});
     return c;
   }
-  function _advStatus(r){ return (r.trig&&r.trig.triggered&&r.score>=65)?'active':(((r.pos>=0.6||r.pos<=0.4)&&r.score>=50)?'pending':'expired'); }
+  function _advStatus(r){ return (r.trig&&r.trig.triggered&&r.score>=65)?'active':(((r.pos>=0.55||r.pos<=0.45)&&r.score>=50)?'pending':'expired'); }
   function paintSmallZone(r){
     if(!r) return; var k=r.sym, isS=r.dir==='short';
     if(r.none){ // 聚焦標的無小單設定 → 監測中（避免殘留舊值/NaN）
