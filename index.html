@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.52.0 · 收盤K · 🔵才出價 · 倉位計算</span></div>
+    <div class="logo">smc-pro<span class="v">v0.52.1 · 日曆分模擬/實盤＋週停損</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -8672,7 +8672,11 @@ injectICTFlagshipGrid();
   function monthEntries(all,y,m){ var p=y+'-'+pad(m+1); return all.filter(function(e){return e.date&&e.date.indexOf(p+'-')===0;}); }
   function dayEntries(all,ds){ return all.filter(function(e){return e.date===ds;}); }
   function agg(list){ var net=0,w=0,l=0,days={}; list.forEach(function(e){ net+=(+e.pnl||0); if((+e.pnl)>0)w++; else if((+e.pnl)<0)l++; days[e.date]=(days[e.date]||0)+(+e.pnl||0); }); return {net:net,wins:w,losses:l,trades:list.length,days:days}; }
-  function streak(all){ var byM={}; all.forEach(function(e){ var k=e.date.slice(0,7); byM[k]=(byM[k]||0)+(+e.pnl||0); }); var keys=Object.keys(byM).sort(); var s=0; for(var i=keys.length-1;i>=0;i--){ if(byM[keys[i]]>0)s++; else break; } return s; }
+  function isReal(e){ return e.acct==='real'; }
+  function acctOf(e){ return e.acct==='real'?'real':'paper'; }
+  function curMode(){ try{ return (window.smcRiskCfg&&window.smcRiskCfg().mode)||'paper'; }catch(_){ return 'paper'; } }
+  function weekStart(){ var d=new Date(); d.setHours(0,0,0,0); var w=(d.getDay()+6)%7; d.setDate(d.getDate()-w); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function streak(all){ all=all.filter(isReal); var byM={}; all.forEach(function(e){ var k=e.date.slice(0,7); byM[k]=(byM[k]||0)+(+e.pnl||0); }); var keys=Object.keys(byM).sort(); var s=0; for(var i=keys.length-1;i>=0;i--){ if(byM[keys[i]]>0)s++; else break; } return s; }
 
   window.openPnlCalendar=function(){ var d=new Date(); if(!S.y){ S.y=d.getFullYear(); S.m=d.getMonth(); S.sel=todayStr(); } render(); };
   window.closePnlCal=function(){ if(BD){ BD.remove(); BD=null; } };
@@ -8688,19 +8692,20 @@ injectICTFlagshipGrid();
     var pnlRaw=(q('pcPnl')||{}).value;
     var r=(q('pcR')||{}).value;
     var note=((q('pcNote')||{}).value||'').trim();
+    var acct=((q('pcAcct')||{}).value==='real')?'real':'paper';
     if(pnlRaw===''||isNaN(+pnlRaw)){ _toast('請填盈虧金額（USDT，賠填負數）','warn'); return; }
     var all=readJ();
-    all.push({ id:'pj'+Date.now()+Math.floor(Math.random()*1000), date:ds, sym:sym, side:side, pnl:+pnlRaw, rr:(r===''?null:+r), note:note, ts:Date.now(), source:'manual' });
+    all.push({ id:'pj'+Date.now()+Math.floor(Math.random()*1000), date:ds, sym:sym, side:side, pnl:+pnlRaw, rr:(r===''?null:+r), note:note, ts:Date.now(), source:'manual', acct:acct });
     writeJ(all); S.sel=ds; S.form=false; var p=ds.slice(0,7).split('-'); S.y=+p[0]; S.m=+p[1]-1;
-    _toast('✅ 已記一筆：'+sym+' '+fmt(+pnlRaw)+'U','normal'); render();
+    _toast('✅ 已記一筆：'+(acct==='real'?'【實盤】':'【模擬】')+sym+' '+fmt(+pnlRaw)+'U','normal'); render();
   };
   window.pcDel=function(id){ var all=readJ().filter(function(e){return e.id!==id;}); writeJ(all); _toast('已刪除一筆','normal'); render(); };
   window.pcExport=function(){
     var all=readJ(); if(!all.length){ _toast('尚無記錄可匯出','warn'); return; }
-    var head='date,symbol,side,pnl_usdt,rr,result,note,source\n';
+    var head='date,account,symbol,side,pnl_usdt,rr,result,note,source\n';
     var body=all.slice().sort(function(a,b){return a.date<b.date?-1:1;}).map(function(e){
       var res=(+e.pnl>0?'win':(+e.pnl<0?'loss':'be'));
-      return [e.date,e.sym,e.side,e.pnl,(e.rr==null?'':e.rr),res,'"'+(e.note||'').replace(/"/g,'""')+'"',e.source||'manual'].join(',');
+      return [e.date,acctOf(e),e.sym,e.side,e.pnl,(e.rr==null?'':e.rr),res,'"'+(e.note||'').replace(/"/g,'""')+'"',e.source||'manual'].join(',');
     }).join('\n');
     var blob=new Blob([head+body],{type:'text/csv;charset=utf-8'}); var url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download='smc-pnl-journal-'+todayStr()+'.csv'; document.body.appendChild(a); a.click(); a.remove();
@@ -8738,7 +8743,7 @@ injectICTFlagshipGrid();
       var dh='<div class="pcal-detail-h">📌 '+S.sel+' <span class="net" style="color:'+(dnet>0?'var(--green)':(dnet<0?'var(--red)':'var(--text-mid)'))+'">'+fmt(dnet)+' U</span></div>';
       var rows = de.length? de.map(function(e){
         var res=+e.pnl>0?'var(--green)':(+e.pnl<0?'var(--red)':'var(--text-mid)');
-        return '<div class="pcal-trade"><span class="sd '+e.side+'">'+(e.side==='short'?'▼空':'▲多')+'</span><span class="sym">'+e.sym+'</span>'+(e.rr!=null?'<span class="rr">'+e.rr+'R</span>':'')+'<span class="note">'+(e.note||'')+'</span><span class="amt" style="color:'+res+'">'+fmt(+e.pnl)+'</span><button class="del" onclick="pcDel(\''+e.id+'\')" title="刪除">✕</button></div>';
+        return '<div class="pcal-trade"><span class="sd '+e.side+'">'+(e.side==='short'?'▼空':'▲多')+'</span><span class="sym">'+e.sym+'</span><span style="font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;'+(acctOf(e)==='real'?'background:rgba(248,81,73,.15);color:var(--red)':'background:rgba(210,153,34,.15);color:var(--amber)')+'">'+(acctOf(e)==='real'?'實盤':'模擬')+'</span>'+(e.rr!=null?'<span class="rr">'+e.rr+'R</span>':'')+'<span class="note">'+(e.note||'')+'</span><span class="amt" style="color:'+res+'">'+fmt(+e.pnl)+'</span><button class="del" onclick="pcDel(\''+e.id+'\')" title="刪除">✕</button></div>';
       }).join('') : '<div class="pcal-empty">這天還沒有記錄 — 按「＋ 記一筆」補登</div>';
       detail='<div class="pcal-detail">'+dh+rows+'</div>';
     }
@@ -8750,6 +8755,7 @@ injectICTFlagshipGrid();
           '<label>幣種<input type="text" id="pcSym" value="BTC" placeholder="BTC"></label>'+
           '<label>方向<select id="pcSide"><option value="long">▲ 做多</option><option value="short">▼ 做空</option></select></label>'+
           '<label>R:R（選填）<input type="number" id="pcR" step="0.1" placeholder="2.0"></label>'+
+          '<label>帳戶<select id="pcAcct"><option value="paper"'+(curMode()==='paper'?' selected':'')+'>模擬盤</option><option value="real"'+(curMode()==='real'?' selected':'')+'>實盤</option></select></label>'+
         '</div>'+
         '<div class="row full"><label>盈虧（USDT，賠填負數）<input type="number" id="pcPnl" step="0.01" placeholder="例：+15.5 或 -8"></label></div>'+
         '<div class="row full"><label>備註（選填）<input type="text" id="pcNote" placeholder="例：⑪ 倫敦Judas · OB回踩 · 守紀律"></label></div>'+
@@ -8759,7 +8765,7 @@ injectICTFlagshipGrid();
     var html=''+
       '<div class="pcal" onclick="event.stopPropagation()">'+
         '<div class="pcal-head">'+
-          '<div class="pcal-title">📅 盈虧日曆 <span style="font-size:10px;color:var(--text-dim);font-weight:600">手動補登 · 之後接OKX</span></div>'+
+          '<div class="pcal-title">📅 盈虧日曆 <span style="font-size:10px;color:var(--text-dim);font-weight:600">手動補登 · 分模擬/實盤 · 之後接OKX</span></div>'+
           '<div class="pcal-nav"><button onclick="pcPrev()">‹</button><span class="pcal-ym">'+S.y+' / '+pad(S.m+1)+'</span><button onclick="pcNext()">›</button><button onclick="pcToday()" title="回本月" style="font-size:11px">今</button></div>'+
           '<button class="pcal-close" onclick="closePnlCal()">✕</button>'+
         '</div>'+
@@ -8768,8 +8774,14 @@ injectICTFlagshipGrid();
             '<div class="pcal-stat"><div class="k">當月淨損益</div><div class="val" style="color:'+netColor+'">'+fmt(a.net)+'</div><div class="sub">USDT</div></div>'+
             '<div class="pcal-stat"><div class="k">當月勝率</div><div class="val" style="color:var(--text)">'+(wr===null?'—':wr+'%')+'</div><div class="sub">'+a.wins+'勝 / '+a.losses+'敗</div></div>'+
             '<div class="pcal-stat"><div class="k">交易</div><div class="val" style="color:var(--text)">'+a.trades+'</div><div class="sub">'+tradingDays+' 個交易日</div></div>'+
-            '<div class="pcal-stat gate"><div class="k">連續正數月 🎯GATE</div><div class="val" style="color:var(--amber)">'+stk+'</div><div class="sub">目標 ≥3 月</div></div>'+
+            '<div class="pcal-stat gate"><div class="k">連續正數月 🎯GATE</div><div class="val" style="color:var(--amber)">'+stk+'</div><div class="sub">只算實盤 · 目標 ≥3 月</div></div>'+
           '</div>'+
+          (function(){ var md=curMode(), ws=weekStart(), wk=all.filter(function(e){ return e.date>=ws && acctOf(e)===md; });
+            var wn=wk.reduce(function(t,e){return t+(+e.pnl||0);},0), rc=(window.smcRiskCfg?window.smcRiskCfg():{cap:800,risk:1}), oneR=rc.cap*rc.risk/100, lim=-5*oneR, hit=wn<=lim;
+            return '<div style="margin:8px 0 2px;padding:8px 10px;border-radius:8px;font-size:12px;border:1px solid '+(hit?'var(--red)':'var(--border)')+';background:'+(hit?'rgba(248,81,73,.12)':'transparent')+'">'
+              +(hit?'🛑 <b style="color:var(--red)">已達週停損</b> · 本週到週一前不再下單':'🗓️ 本週（週一起）')
+              +' · '+(md==='real'?'實盤':'模擬盤')+' <b style="color:'+(wn>0?'var(--green)':(wn<0?'var(--red)':'var(--text-mid)'))+'">'+fmt(wn)+'U</b>（'+(oneR>0?(Math.round(wn/oneR*10)/10):0)+'R）'
+              +' · 週停損線 −5R = '+Math.round(lim)+'U · '+wk.length+' 筆</div>'; })()+
           '<div class="pcal-dow">'+dow+'</div>'+
           '<div class="pcal-grid">'+cells+'</div>'+
           (tradingDays? '<div class="pcal-best">本月最佳日：<b style="color:var(--green)">'+(best?best.slice(5)+' '+fmt(a.days[best]):'—')+'</b>　最差日：<b style="color:var(--red)">'+(worst?worst.slice(5)+' '+fmt(a.days[worst]):'—')+'</b></div>' : '')+
