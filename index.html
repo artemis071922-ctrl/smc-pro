@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.51.0 · 順序式觸發 + ⑥ 停損≥0.4%</span></div>
+    <div class="logo">smc-pro<span class="v">v0.52.0 · 收盤K · 🔵才出價 · 倉位計算</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -6498,6 +6498,7 @@ window.addEventListener('load', () => {
       timestamp: now.toISOString(),
       version: V,
       kind: kind, // high | small | advisor
+      ...(window.phaseDExtra ? window.phaseDExtra() : {}),
       // ② 標的（3）
       symbol: sig.sym || null,
       side: sig.side || null,
@@ -6593,7 +6594,7 @@ window.addEventListener('load', () => {
     exportCSV: function () {
       const log = readLog();
       if (!log.length) return 'no data';
-      const cols = Object.keys(log[0]);
+      const cols = []; log.forEach(r => Object.keys(r).forEach(k => { if (cols.indexOf(k) < 0) cols.push(k); }));  // v0.52 欄位聯集（手動/自動/訊號混合不掉欄）
       const csv = [cols.join(',')].concat(
         log.map(row => cols.map(c => JSON.stringify(row[c] == null ? '' : row[c])).join(','))
       ).join('\n');
@@ -7310,8 +7311,26 @@ injectICTFlagshipGrid();
   // 與 TV Pine「SMC訊號」v4 逐根同一套邏輯（結構核心＝ICT 統一規格 v1）。
   var SEQ_MIN_RISK=0.004, SEQ_OTE=0.62, SEQ_ARM_BARS=24, SEQ_MSS_BARS=36;
   window.SEQ_MIN_RISK=SEQ_MIN_RISK;
+  // v0.52 收盤鐵律：結構/順序式只用已收盤 K（OKX confirm=0 的形成中那根剔除）；即時價只用來看是否觸及 OTE
+  function closedOnly(cs){ return (cs&&cs.length&&cs[cs.length-1].confirm===0)?cs.slice(0,-1):(cs||[]); }
+  window.closedOnly=closedOnly;
+  // v0.52 風控設定＋Phase D 擴充欄（38→44：account_mode / trigger_model / seq_stage / risk_pct / position_contracts / risk_usdt）
+  var RISK_LS='smc_risk_cfg', CT_VAL={BTC:0.01,ETH:0.1,SOL:1,XRP:100,TRX:1000};
+  function riskCfg(){ var c; try{ c=JSON.parse(localStorage.getItem(RISK_LS)||'{}'); }catch(_){ c={}; } return {cap:(c.cap>0?+c.cap:800), risk:(c.risk>0?+c.risk:1), mode:(c.mode==='real'?'real':'paper')}; }
+  function saveRiskCfg(c){ try{ localStorage.setItem(RISK_LS, JSON.stringify(c)); }catch(_){} }
+  function sizeFor(sym, entry, sl){
+    var c=riskCfg(), rk=(entry!=null&&sl!=null)?Math.abs(entry-sl):0; if(!(rk>0)) return null;
+    var riskU=c.cap*c.risk/100, qty=riskU/rk, ct=CT_VAL[sym]||null;
+    return {riskU:riskU, qty:qty, contracts:ct?Math.floor(qty/ct*100)/100:null, notional:qty*entry, lev:qty*entry/c.cap, riskPct:rk/entry, weekStopU:riskU*5};
+  }
+  window.smcRiskCfg=riskCfg; window.smcSizeFor=sizeFor;
+  window.phaseDExtra=function(){
+    var P=window.lastDetect&&window.lastDetect.prop;
+    return {account_mode:riskCfg().mode, trigger_model:'seq-v1 OTE62·⑥0.4%·2R',
+            seq_stage:(P&&P.seq)?(P.seqStage||0):0, risk_pct:(P&&P.riskPct!=null)?Math.round(P.riskPct*10000)/100:null};
+  };
   function seqReplay(cs){
-    var N=cs?cs.length:0, out={L:{stage:0},S:{stage:0},nFireL:0,nFireS:0,fh:0};
+    var N=cs?cs.length:0, out={L:{stage:0},S:{stage:0},nFireL:0,nFireS:0,fh:0,trades:[]};
     if(N<12) return out;
     var jH=null,jHp=null,jL=null,jLp=null, evDone=false, lastEvBi=null, lastEvCode=0;
     var L={stage:0}, S={stage:0};
@@ -7335,7 +7354,7 @@ injectICTFlagshipGrid();
       var zone=pos==null?0:((pos<0||pos>1)?4:((pos>0.45&&pos<0.55)?2:(pos>=0.55?3:1)));
       var swNow=(prevL!=null&&c.l<prevL&&c.c>prevL)?1:((prevH!=null&&c.h>prevH&&c.c<prevH)?-1:0);
       // ── 做多 ──
-      if(L.stage===3){ if(c.l<=L.sl||c.h>=L.tp){ L={stage:0,done:(c.l<=L.sl?'sl':'tp')}; } }
+      if(L.stage===3){ if(c.l<=L.sl||c.h>=L.tp){ var _dL=(c.l<=L.sl?'sl':'tp'); if(L.ti!=null){ out.trades[L.ti].outcome=_dL; out.trades[L.ti].exitBar=i; } L={stage:0,done:_dL}; } }
       if(swNow===1&&zone===1&&L.stage!==3){ L={stage:1,ext:c.l,armBar:i}; }
       if(L.stage===1&&i-L.armBar>SEQ_ARM_BARS) L={stage:0};
       var dL=L.stage===1&&evt>0&&swNow!==1;
@@ -7345,10 +7364,11 @@ injectICTFlagshipGrid();
         if(!dL&&c.l<=L.ote){ var fL=Math.min(c.o,L.ote), kL=fL-L.sl;
           L.riskPct=kL/fL; L.riskOk=kL>0&&L.riskPct>=SEQ_MIN_RISK;
           if(L.riskOk){ L.stage=3; L.fill=fL; L.tp=fL+2*kL; L.fireBar=i; out.nFireL++; out.fh=(out.fh*31+i%997+1)%1000003;
-            if(c.l<=L.sl) L={stage:0,done:'sl'}; } } }
+            L.ti=out.trades.length; out.trades.push({dir:'long',bar:i,t:c.t,fill:fL,sl:L.sl,tp:L.tp,riskPct:L.riskPct,outcome:null});
+            if(c.l<=L.sl){ out.trades[L.ti].outcome='sl'; out.trades[L.ti].exitBar=i; L={stage:0,done:'sl'}; } } } }
       if(L.stage===2&&(c.c<=L.ext||i-L.mssBar>SEQ_MSS_BARS)) L={stage:0};
       // ── 做空（鏡像）──
-      if(S.stage===3){ if(c.h>=S.sl||c.l<=S.tp){ S={stage:0,done:(c.h>=S.sl?'sl':'tp')}; } }
+      if(S.stage===3){ if(c.h>=S.sl||c.l<=S.tp){ var _dS=(c.h>=S.sl?'sl':'tp'); if(S.ti!=null){ out.trades[S.ti].outcome=_dS; out.trades[S.ti].exitBar=i; } S={stage:0,done:_dS}; } }
       if(swNow===-1&&zone===3&&S.stage!==3){ S={stage:1,ext:c.h,armBar:i}; }
       if(S.stage===1&&i-S.armBar>SEQ_ARM_BARS) S={stage:0};
       var dS=S.stage===1&&evt<0&&swNow!==-1;
@@ -7358,7 +7378,8 @@ injectICTFlagshipGrid();
         if(!dS&&c.h>=S.ote){ var fS=Math.max(c.o,S.ote), kS=S.sl-fS;
           S.riskPct=kS/fS; S.riskOk=kS>0&&S.riskPct>=SEQ_MIN_RISK;
           if(S.riskOk){ S.stage=3; S.fill=fS; S.tp=fS-2*kS; S.fireBar=i; out.nFireS++; out.fh=(out.fh*31+i%997+501)%1000003;
-            if(c.h>=S.sl) S={stage:0,done:'sl'}; } } }
+            S.ti=out.trades.length; out.trades.push({dir:'short',bar:i,t:c.t,fill:fS,sl:S.sl,tp:S.tp,riskPct:S.riskPct,outcome:null});
+            if(c.h>=S.sl){ out.trades[S.ti].outcome='sl'; out.trades[S.ti].exitBar=i; S={stage:0,done:'sl'}; } } } }
       if(S.stage===2&&(c.c>=S.ext||i-S.mssBar>SEQ_MSS_BARS)) S={stage:0};
     }
     out.L=L; out.S=S; out.N=N; return out;
@@ -7399,7 +7420,7 @@ injectICTFlagshipGrid();
       tp=hi;
     }
     var risk=Math.abs(entry-sl), reward=Math.abs(tp-entry), rr=risk>0?reward/risk:null;
-    return {dir:dir,entry:entry,sl:sl,tp:tp,rr:rr,pos:pos,slSrc:slSrc,enSrc:enSrc};
+    return {dir:dir,entry:entry,sl:sl,tp:tp,rr:rr,pos:pos,slSrc:slSrc,enSrc:enSrc,preview:true};  // v0.52：無 🔵 → 只給方向參考，價格不顯示
   }
   // 狀態（v0.51 順序式）：stage 0 等掃 → 1 已掃等 MSS → 2 已 MSS 等回 OTE → 3 🟢 已觸發（回到 OTE 且 ⑥ 停損距離達標）
   function setupTrigger(cs, d, dir, seq){
@@ -7410,6 +7431,7 @@ injectICTFlagshipGrid();
   }
   window.smcL1Apply=function(){
     if(!lastProposal || lastProposal.none) return;
+    if(lastProposal.preview){ if(typeof window.showToast==='function') window.showToast('⏳ 還沒有 🔵（已掃＋MSS）· 沒有🔵就不打','warn'); return; }
     var dp=symDp(curSym()), f=Math.pow(10,dp);
     var rnd=function(v){ return Math.round(v*f)/f; };
     var e=document.getElementById('l1entry'), s=document.getElementById('l1sl'), t=document.getElementById('l1tp');
@@ -7572,7 +7594,7 @@ injectICTFlagshipGrid();
 
   function paintDetect(){
     var body=document.querySelector('#l1detect .d-body'); if(!body) return;
-    var k=curSym(), cs=(window.CANDLES&&window.CANDLES[k])||[];
+    var k=curSym(), rawCs=(window.CANDLES&&window.CANDLES[k])||[], cs=closedOnly(rawCs), fb=(rawCs.length&&rawCs[rawCs.length-1].confirm===0)?rawCs[rawCs.length-1]:null;
     var d=detectStructure(cs);
     if(!d){ body.innerHTML='<span style="color:#6e7681">等 K 線累積（≥12 根）…</span>'; return; }
     var dp=symDp(k);
@@ -7593,13 +7615,14 @@ injectICTFlagshipGrid();
     if(!prop || prop.none){ ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240;color:#8b949e">💡 提議：<b style="color:#d29922">'+((prop&&prop.reason)||'等結構明朗')+'</b>（無明確 setup，不給假價）</div>'; }
     else {
       var _pz=prop.pos!=null?(prop.pos*100).toFixed(0)+'%':'—';
+      var PX=function(v){ return prop.preview?'<span style="color:#6e7681">等🔵</span>':fmtPx(v,dp); };
       var dirTxt=prop.seq?(prop.dir==='short'?'<span style="color:#f85149">做空 ▼（順序式 · 已掃高＋MSS）</span>':'<span style="color:#3fb950">做多 ▲（順序式 · 已掃低＋MSS）</span>'):(prop.dir==='short'?'<span style="color:#f85149">做空 ▼（溢價 '+_pz+'）</span>':'<span style="color:#3fb950">做多 ▲（折扣 '+_pz+'）</span>');
       var rrCol=prop.rr==null?'#8b949e':(prop.rr>=2?'#3fb950':(prop.rr>=1.5?'#d29922':'#f85149'));
       var trig=setupTrigger(cs,d,prop.dir,seq);
       var hiLo=prop.dir==='short'?'高':'低';
       var stCol,stBg,stTxt,stNote;
       if(trig.triggered){ stCol='#3fb950'; stBg='rgba(63,185,80,.14)'; stTxt='🟢 已觸發'; stNote='掃'+hiLo+' → MSS → 回到 OTE 62% · 限價進場，SL 在掃'+hiLo+'點外，TP 2R'; }
-      else if(trig.mss){ stCol='#58A6FF'; stBg='rgba(31,111,235,.14)'; stTxt='🔵 等回 OTE'; stNote='已掃'+hiLo+'＋MSS · 限價掛 OTE 62% '+(trig.ote!=null?fmtPx(trig.ote,dp):'')+' 等回測，別追價'; }
+      else if(trig.mss){ stCol='#58A6FF'; stBg='rgba(31,111,235,.14)'; stTxt='🔵 等回 OTE'; stNote='已掃'+hiLo+'＋MSS · 限價掛 OTE 62% '+(trig.ote!=null?fmtPx(trig.ote,dp):'')+' 等回測，別追價'+((fb&&trig.ote!=null&&(prop.dir==='short'?fb.h>=trig.ote:fb.l<=trig.ote))?' · ⚡ 本根已觸及 OTE（未收盤；限價單應已成交，收盤後轉 🟢）':''); }
       else if(trig.swept){ stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote='已掃'+hiLo+' · 等 MSS 結構轉換確認（24 根內）'; }
       else if(trig.conflict){ stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote='⚠ 結構剛反向 · 當心，等重新確認再進'; }
       else { stCol='#d29922'; stBg='rgba(210,153,34,.14)'; stTxt='🟡 醞釀中'; stNote=(prop.dir==='short'?'溢價':'折扣')+'位置到了，但還沒掃'+hiLo+'＋MSS · 別在區間中間進，等 🟢'; }
@@ -7611,18 +7634,18 @@ injectICTFlagshipGrid();
           +'<div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;font-family:monospace;color:'+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#8b949e'))+'">共振 '+reso.score+'</b><span style="font-size:10px;color:#8b949e">'+(reso.tier==='high'?'🎯 高勝率':(reso.tier==='small'?'⚡ 小單':'⊘ 監測'))+' · '+reso.fired+'/4 庫同向</span></div>'
           +'<div style="display:flex;gap:11px;margin-top:4px;font-size:10px">'+['ict','kbar','trend','harm'].map(function(x){var lbl={ict:'ICT',kbar:'K線',trend:'趨勢',harm:'諧波'}[x];var st=reso.lights[x];var col=st==='agree'?'#3fb950':(st==='conflict'?'#f85149':'#4a515c');var dot=st==='agree'?'●':(st==='conflict'?'✕':'○');return '<span style="color:'+col+'">'+dot+' '+lbl+'</span>';}).join('')+'</div>'
           +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:7px">'
-            +'<div style="background:#0d1220;border:1px solid rgba(31,111,235,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#58A6FF">進場 '+(prop.enSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</div></div>'
-            +'<div style="background:#0d1220;border:1px solid rgba(248,81,73,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#f85149">停損 '+(prop.slSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#ff8a78">'+fmtPx(prop.sl,dp)+'</div></div>'
-            +'<div style="background:#0d1220;border:1px solid rgba(63,185,80,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#3fb950">止盈</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#56d364">'+fmtPx(prop.tp,dp)+'</div></div>'
+            +'<div style="background:#0d1220;border:1px solid rgba(31,111,235,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#58A6FF">進場 '+(prop.enSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#79c0ff">'+PX(prop.entry)+'</div></div>'
+            +'<div style="background:#0d1220;border:1px solid rgba(248,81,73,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#f85149">停損 '+(prop.slSrc||'')+'</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#ff8a78">'+PX(prop.sl)+'</div></div>'
+            +'<div style="background:#0d1220;border:1px solid rgba(63,185,80,.55);border-radius:5px;padding:4px 5px;text-align:center"><div style="font-size:9px;color:#3fb950">止盈</div><div style="font-family:monospace;font-size:15px;font-weight:800;color:#56d364">'+PX(prop.tp)+'</div></div>'
           +'</div>'
           +'<div style="font-size:9px;color:#6e7681;font-family:monospace;margin-top:4px">'+reso.brk.join(' ')+'</div>'
           +'</div>'):'')
         +row('方向','<b>'+dirTxt+'</b>')
-        +row('進場 <span style="color:#58A6FF">'+(prop.enSrc||'OTE')+'</span>','<b style="font-family:monospace;color:#79c0ff">'+fmtPx(prop.entry,dp)+'</b>')
-        +row('止損 <span style="color:#58A6FF">'+(prop.slSrc||'擺動外')+'</span>','<b style="font-family:monospace;color:#f85149">'+fmtPx(prop.sl,dp)+'</b>')
-        +row('止盈 TP（對向流動性）','<b style="font-family:monospace;color:#3fb950">'+fmtPx(prop.tp,dp)+'</b>')
-        +row('R:R','<b style="font-family:monospace;color:'+rrCol+'">'+(prop.rr?prop.rr.toFixed(2)+' : 1':'—')+'</b>')
-        +'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>'
+        +row('進場 <span style="color:#58A6FF">'+(prop.enSrc||'OTE')+'</span>','<b style="font-family:monospace;color:#79c0ff">'+PX(prop.entry)+'</b>')
+        +row('止損 <span style="color:#58A6FF">'+(prop.slSrc||'擺動外')+'</span>','<b style="font-family:monospace;color:#f85149">'+PX(prop.sl)+'</b>')
+        +row('止盈 TP（對向流動性）','<b style="font-family:monospace;color:#3fb950">'+PX(prop.tp)+'</b>')
+        +row('R:R','<b style="font-family:monospace;color:'+rrCol+'">'+(prop.preview?'—':(prop.rr?prop.rr.toFixed(2)+' : 1':'—'))+'</b>')
+        +(prop.preview?'<div style="margin-top:7px;padding:8px;border-radius:7px;border:1px dashed #6e7681;color:#8b949e;font-size:11px;text-align:center">⏳ 只有區位方向，沒有 🔵（已掃＋MSS）→ 不出價、不套用 · 沒有🔵就不打</div>':'<button onclick="window.smcL1Apply&&window.smcL1Apply()" style="width:100%;margin-top:7px;padding:8px;border:none;border-radius:7px;background:linear-gradient(90deg,#1f6feb,#388bfd);color:#fff;font-weight:800;font-size:12px;cursor:pointer">💡 套用提議 → L1（算 R:R＋亮燈＋同步戰情室）</button>')
         +'</div>';
     }
     var mh='';
@@ -7708,6 +7731,14 @@ injectICTFlagshipGrid();
         var good = dir==='short'? pos>=0.5 : pos<=0.5;
         var ideal = dir==='short'? pos>=0.62 : pos<=0.38;
         g3.classList.add(good?(ideal?'ok':'warn'):'bad'); } }
+    var szEl=document.getElementById('l1size');
+    if(szEl){ var z=sizeFor(k,entry,sl), rc=riskCfg();
+      if(!z){ szEl.innerHTML='📐 倉位：填進場＋止損後自動算 · 本金 '+rc.cap+'U × '+rc.risk+'% = 每筆最多虧 <b style="color:#f85149">'+(rc.cap*rc.risk/100).toFixed(1)+'U</b> · 週停損 −5R = '+(rc.cap*rc.risk/100*5).toFixed(0)+'U'; }
+      else { var warn6=z.riskPct<SEQ_MIN_RISK?' <b style="color:#f85149">⚠ ⑥ 停損 '+(z.riskPct*100).toFixed(2)+'% &lt; '+(SEQ_MIN_RISK*100).toFixed(1)+'%</b>':'';
+        szEl.innerHTML='📐 倉位 <b style="color:#e6edf3;font-family:monospace;font-size:13px">'+(z.contracts!=null?z.contracts+' 張':'—')+'</b>'
+          +' <span style="font-family:monospace">('+z.qty.toPrecision(4)+' '+k+' · 名目 '+Math.round(z.notional).toLocaleString()+'U · 需 '+z.lev.toFixed(1)+'x)</span>'
+          +'<br>停損打到虧 <b style="color:#f85149">'+z.riskU.toFixed(1)+'U</b> · TP 2R 賺 <b style="color:#3fb950">'+(z.riskU*2).toFixed(1)+'U</b> · 週停損 −5R = '+z.weekStopU.toFixed(0)+'U · <span style="color:'+(rc.mode==='real'?'#f85149':'#d29922')+'">'+(rc.mode==='real'?'實盤':'模擬盤')+'</span>'+warn6
+          +'<br><span style="color:#6e7681;font-size:10px">張數以 OKX 每張 '+(CT_VAL[k]||'?')+' '+k+' 計，下單前在 OKX 面板核對</span>'; } }
     lastCalc={k:k,dp:dp,entry:entry,sl:sl,tp:tp,rhi:rhi,rlo:rlo,live:live,dir:dir,risk:risk,reward:reward,rr:rr};
     try{ syncWarRoom(); }catch(_){}
     try{ renderRealChart(); }catch(_){}
@@ -7752,7 +7783,12 @@ injectICTFlagshipGrid();
       resonance_score:R?R.score:null, resonance_tier:R?R.tier:null, resonance_fired:R?R.fired:null,
       resonance_lights:R?JSON.stringify(R.lights):null, resonance_breakdown:R?R.brk.join(' '):null,
       signal_source:srcMode, sl_source:P?P.slSrc:null, entry_source:P?P.enSrc:null,
-      cards_detected:allCards
+      cards_detected:allCards,
+      // ───── v0.52 擴充欄 ─────
+      account_mode:riskCfg().mode, trigger_model:'seq-v1 OTE62·⑥0.4%·2R',
+      seq_stage:(P&&P.seq)?(P.seqStage||0):0, risk_pct:(c.entry&&c.sl!=null)?Math.round(Math.abs(c.entry-c.sl)/c.entry*10000)/100:null,
+      position_contracts:(function(){ var z=sizeFor(c.k,c.entry,c.sl); return z?z.contracts:null; })(),
+      risk_usdt:(function(){ var z=sizeFor(c.k,c.entry,c.sl); return z?Math.round(z.riskU*100)/100:null; })()
     };
     var log=readLog(); log.push(rec); writeLog(log);
     toast('📸 已建檔 · '+c.k+' '+(c.dir==='short'?'做空':(c.dir==='long'?'做多':''))+(R?' · 共振'+R.score+'('+R.fired+'/4)':'')+(srcMode?' · '+(srcMode==='card'?'吃卡':'幾何'):'')+' · R:R '+(c.rr!=null?c.rr.toFixed(2):'—')+' · 共 '+log.length+' 筆','normal');
@@ -7761,7 +7797,7 @@ injectICTFlagshipGrid();
   function exportCsv(){
     if(window.SignalLog38 && window.SignalLog38.exportCSV){ toast('匯出：'+window.SignalLog38.exportCSV(),'normal'); return; }
     var log=readLog(); if(!log.length){ toast('尚無記錄','warn'); return; }
-    var cols=Object.keys(log[0]);
+    var cols=[]; log.forEach(function(r){ Object.keys(r).forEach(function(k){ if(cols.indexOf(k)<0) cols.push(k); }); });
     var csv=[cols.join(',')].concat(log.map(function(row){return cols.map(function(c){return JSON.stringify(row[c]==null?'':row[c]);}).join(',');})).join('\n');
     var blob=new Blob([csv],{type:'text/csv;charset=utf-8'}), url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download='smcpro_signal_log_'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
@@ -7803,7 +7839,7 @@ injectICTFlagshipGrid();
     if(drive && typeof liveWr==='number' && liveWr>0){ var _okd=function(v){ return v/liveWr>0.2 && v/liveWr<5; }; if(!(_okd(c.entry)&&_okd(c.sl)&&_okd(c.tp))) drive=false; }
     // 手填 L1（你的計畫）優先；否則用引擎自動提議（接真·非範例）
     var auto=null;
-    if(!drive){ var sr=(window.SYMRESO&&window.SYMRESO[wrK]); if(sr && !sr.none && sr.entry!=null && sr.sl!=null && sr.tp!=null) auto=sr; }
+    if(!drive){ var sr=(window.SYMRESO&&window.SYMRESO[wrK]); if(sr && !sr.none && !sr.preview && sr.entry!=null && sr.sl!=null && sr.tp!=null) auto=sr; }
     var src = drive? {entry:c.entry,sl:c.sl,tp:c.tp,rr:c.rr} : (auto? {entry:auto.entry,sl:auto.sl,tp:auto.tp,rr:auto.rr} : null);
     var rrTxt=(src && src.rr!=null)? (' · '+(Math.round(src.rr*10)/10)+'R') : '';
     var hostReal=(function(){var h=document.getElementById('wrChart');return !!(h&&h.dataset&&h.dataset.real==='1');})();
@@ -7899,7 +7935,7 @@ injectICTFlagshipGrid();
     var c=lastCalc, plan=(c&&c.k===k&&c.entry!=null&&c.sl!=null&&c.tp!=null)?c:null;
     // ★防跨標的汙染：計畫價位若與即時價差太離譜(非同一量級)→ 視為殘留舊標的，丟棄，不讓它撐爆 Y 軸
     if(plan && typeof live==='number' && live>0){ var _ok=function(v){ return typeof v==='number' && v/live>0.2 && v/live<5; }; if(!(_ok(plan.entry)&&_ok(plan.sl)&&_ok(plan.tp))) plan=null; }
-    var det=detectStructure(cs);
+    var det=detectStructure(closedOnly(cs));
     var pmin=Infinity,pmax=-Infinity;
     data.forEach(function(d){ if(d.l<pmin)pmin=d.l; if(d.h>pmax)pmax=d.h; });
     [live,plan&&plan.entry,plan&&plan.sl,plan&&plan.tp,det&&det.hi,det&&det.lo].forEach(function(v){ if(typeof v==='number'){ if(v<pmin)pmin=v; if(v>pmax)pmax=v; } });
@@ -7990,7 +8026,8 @@ injectICTFlagshipGrid();
         resonance_score:R?R.score:null, resonance_tier:R?R.tier:null, resonance_fired:R?R.fired:null,
         resonance_lights:R?JSON.stringify(R.lights):null, resonance_breakdown:R?R.brk.join(' '):null,
         signal_source:srcMode, sl_source:P?P.slSrc:null, entry_source:P?P.enSrc:null, cards_detected:allCards,
-        outcome:null, realized_pnl:null, exit_reason:null
+        outcome:null, realized_pnl:null, exit_reason:null,
+        account_mode:(c.demo?'paper':'real'), trigger_model:'seq-v1 OTE62·⑥0.4%·2R', seq_stage:(P&&P.seq)?(P.seqStage||0):0, risk_pct:(P&&P.riskPct!=null)?Math.round(P.riskPct*10000)/100:null
       });
       added++;
     });
@@ -8054,6 +8091,12 @@ injectICTFlagshipGrid();
         +'<div class="l1-field"><label>區間低 (選填)</label><input id="l1rlo" type="text" inputmode="decimal" placeholder="range low"></div>'
         +'<div class="l1-field"><label>　</label><div style="font-size:10px;color:#6e7681;line-height:1.3;padding-top:5px">填區間→亮③位置燈<br>方向由 進場vs止損 自動判定</div></div>'
       +'</div>'
+      +'<div class="l1-range">'
+        +'<div class="l1-field"><label>本金 USDT</label><input id="l1cap" type="text" inputmode="decimal" placeholder="800"></div>'
+        +'<div class="l1-field"><label>每筆風險 %</label><input id="l1riskp" type="text" inputmode="decimal" placeholder="1"></div>'
+        +'<div class="l1-field"><label>帳戶</label><select id="l1mode" style="width:100%;padding:6px;background:#0d1220;color:#e6edf3;border:1px solid #2b3240;border-radius:6px"><option value="paper">模擬盤</option><option value="real">實盤</option></select></div>'
+      +'</div>'
+      +'<div id="l1size" style="margin:0 0 8px;padding:7px 9px;background:#0d1220;border:1px solid #1c2430;border-radius:6px;font-size:11px;color:#8b949e">📐 倉位：填進場＋止損後自動算</div>'
       +'<div class="l1-readout">'
         +'<div class="l1-stat" id="l1risk"><div class="k">風險 1R</div><div class="v">—</div><div class="s"></div></div>'
         +'<div class="l1-stat" id="l1reward"><div class="k">報酬</div><div class="v">—</div><div class="s"></div></div>'
@@ -8096,6 +8139,11 @@ injectICTFlagshipGrid();
       +'</div>';
     anchor.insertAdjacentHTML('afterend', html);
     ['l1entry','l1sl','l1tp','l1rhi','l1rlo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input', renderCalc); });
+    (function(){ var rc=riskCfg(), ec=document.getElementById('l1cap'), er=document.getElementById('l1riskp'), em=document.getElementById('l1mode');
+      if(ec) ec.value=rc.cap; if(er) er.value=rc.risk; if(em) em.value=rc.mode;
+      function sv(){ var n=riskCfg(); var a=parseFloat(ec&&ec.value), b=parseFloat(er&&er.value);
+        if(a>0) n.cap=a; if(b>0&&b<=5) n.risk=b; if(em) n.mode=em.value; saveRiskCfg(n); try{ renderCalc(); }catch(_){} }
+      [ec,er].forEach(function(e){ if(e) e.addEventListener('input',sv); }); if(em) em.addEventListener('change',sv); })();
     var sel=document.getElementById('l1sym'); if(sel) sel.addEventListener('change', function(){ renderCalc(); try{paintCandleStatus();}catch(_){} try{paintDetect();}catch(_){} try{ var k=this.value; if(((window.CANDLES&&window.CANDLES[k])||[]).length<20) backfillCandles(k); }catch(_){} try{ renderRealChart(); }catch(_){} });
     var go=document.getElementById('l1go'); if(go) go.addEventListener('click', snapshot);
     var exp=document.getElementById('l1exp'); if(exp) exp.addEventListener('click', exportCsv);
@@ -8199,52 +8247,44 @@ injectICTFlagshipGrid();
       all=all.concat(j.data); after=j.data[j.data.length-1][0];
       if(j.data.length<100) break;
     }
-    return all.map(function(r){ return {t:+r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4]}; }).sort(function(a,b){ return a.t-b.t; });
+    return all.map(function(r){ return {t:+r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],confirm:(r[8]!=null?+r[8]:1)}; }).sort(function(a,b){ return a.t-b.t; });
   }
+  // v0.52 回測＝跟 TV 回測器同一套：順序式 seqReplay（收盤K）＋⑥≥0.4%＋限價 OTE62＋2R＋36根失效＋手續費（進場 maker 0.02% · TP maker 0.02% · SL taker 0.05%）
+  var FEE_MK=0.0002, FEE_TK=0.0005;
+  function kzOfTs(t){ var d=new Date(t), m=(d.getUTCHours()*60+d.getUTCMinutes()+480)%1440;
+    if(m>=240&&m<360) return '尾盤'; if(m>=600&&m<780) return '亞洲'; if(m>=900&&m<1080) return '倫敦';
+    if((m>=1080&&m<1140)||(m>=1260&&m<1290)) return '精華'; if(m>=1290&&m<1440) return '紐約'; return null; }
+  window.kzOfTs=kzOfTs;
   function runBacktest(cs){
-    var trades=[], i=50, N=cs.length, maxWait=12, maxHold=72;
-    while(i<N-2){
-      var hist=cs.slice(0,i+1), d=detectStructure(hist);
-      if(!d){ i++; continue; }
-      var sq=seqReplay(hist), lv=detectLevels(hist,d), prop=proposeSetup(d,lv,sq);
-      if(!prop||prop.none){ i++; continue; }
-      if(!setupTrigger(hist,d,prop.dir,sq).triggered){ i++; continue; }
-      var reso=computeResonance(prop,lv,detectICTModels(hist),detectKbars(hist),detectHarmonic(hist),detectTrendline(hist),false);
-      var src=((prop.slSrc&&prop.slSrc.indexOf('⑤')>=0)||(prop.enSrc&&prop.enSrc.indexOf('⑬')>=0))?'card':'geometry';
-      var entry=prop.entry, sl=prop.sl, tp=prop.tp, dir=prop.dir, risk=Math.abs(entry-sl);
-      if(risk<=0){ i++; continue; }
-      var fill=-1;
-      for(var w=i+1;w<Math.min(N,i+1+maxWait);w++){ if(cs[w].l<=entry&&cs[w].h>=entry){ fill=w; break; } }
-      if(fill<0){ i++; continue; }
-      var oc=null, R=null, resb=fill;
-      for(var f=fill+1;f<Math.min(N,fill+1+maxHold);f++){
-        var hitSL=dir==='short'?cs[f].h>=sl:cs[f].l<=sl, hitTP=dir==='short'?cs[f].l<=tp:cs[f].h>=tp;
-        if(hitSL){ oc='sl'; R=-1; resb=f; break; }
-        if(hitTP){ oc='tp'; R=Math.abs(tp-entry)/risk; resb=f; break; }
-      }
-      if(!oc){ i=fill+1; continue; }
-      trades.push({source:src, tier:reso?reso.tier:'watch', fired:reso?reso.fired:0, dir:dir, outcome:oc, R:R});
-      i=resb+1;
-    }
-    function agg(ts){ if(!ts.length) return {n:0,win:0,avgR:0,totR:0}; var w=ts.filter(function(t){return t.outcome==='tp';}).length; var tot=ts.reduce(function(a,t){return a+t.R;},0); return {n:ts.length, win:Math.round(w/ts.length*100), avgR:Math.round(tot/ts.length*100)/100, totR:Math.round(tot*10)/10}; }
-    var by=function(f){ return agg(trades.filter(f)); };
-    return { trades:trades, summary:{ all:agg(trades),
-      card:by(function(t){return t.source==='card';}), geometry:by(function(t){return t.source==='geometry';}),
-      r3:by(function(t){return t.fired>=3;}), rlo:by(function(t){return t.fired<3;}),
-      high:by(function(t){return t.tier==='high';}), small:by(function(t){return t.tier==='small';}), watch:by(function(t){return t.tier==='watch';}) }};
+    var q=seqReplay(closedOnly(cs)), trades=[];
+    (q.trades||[]).forEach(function(t){
+      if(!t.outcome) return; var rk=Math.abs(t.fill-t.sl); if(!(rk>0)) return;
+      var ex=t.outcome==='tp'?t.tp:t.sl, gross=t.outcome==='tp'?Math.abs(t.tp-t.fill)/rk:-1;
+      var fee=(t.fill*FEE_MK+ex*(t.outcome==='tp'?FEE_MK:FEE_TK))/rk;
+      trades.push({dir:t.dir, kz:kzOfTs(t.t), outcome:t.outcome, gross:gross, R:gross-fee, riskPct:t.riskPct, t:t.t});
+    });
+    function agg(ts){ if(!ts.length) return {n:0,win:0,avgR:0,totR:0};
+      var w=ts.filter(function(t){return t.outcome==='tp';}).length, tot=ts.reduce(function(a,t){return a+t.R;},0);
+      return {n:ts.length, win:Math.round(w/ts.length*100), avgR:Math.round(tot/ts.length*100)/100, totR:Math.round(tot*10)/10}; }
+    var by=function(f){ return agg(trades.filter(f)); }, inKz=function(t){ return !!t.kz; };
+    var kzs={}; ['亞洲','倫敦','精華','紐約','尾盤'].forEach(function(z){ kzs[z]=by(function(t){return t.kz===z;}); });
+    return { trades:trades, open:(q.trades||[]).filter(function(t){return !t.outcome;}).length, summary:{
+      kz:by(inKz), all:agg(trades), off:by(function(t){return !t.kz;}),
+      long:by(function(t){return inKz(t)&&t.dir==='long';}), short:by(function(t){return inKz(t)&&t.dir==='short';}), byKz:kzs }};
   }
   function renderBacktestReport(sym, bar, res, bars){
-    var s=res.summary; function cell(a){ return a.n?('<b style="color:'+(a.win>=50?'#3fb950':'#f85149')+'">'+a.win+'% 勝</b> · '+a.avgR+'R均 · '+a.n+'筆 · 累'+a.totR+'R'):'<span style="color:#6e7681">—</span>'; }
+    var s=res.summary; function cell(a){ return a.n?('<b style="color:'+(a.totR>0?'#3fb950':'#f85149')+'">'+a.win+'% 勝</b> · '+(a.avgR>0?'+':'')+a.avgR+'R/筆 · '+a.n+'筆 · 累'+(a.totR>0?'+':'')+a.totR+'R'):'<span style="color:#6e7681">—</span>'; }
     function pair(l,c,col){ return '<span style="color:'+col+'">'+l+'</span><span>'+cell(c)+'</span>'; }
+    var days=Math.round(bars*(bar==='5m'?5:bar==='15m'?15:bar==='1H'?60:5)/1440*10)/10;
     var html='<div id="btReport" style="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.remove()">'
       +'<div style="background:#11161f;border:1px solid #2b3240;border-radius:12px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px;font-family:var(--font-tc,sans-serif)">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:15px;color:#e6edf3">🔬 回測報告 · '+sym+' '+bar+'</b><span style="color:#8b949e;font-size:11px">'+bars+' 根 · 同一套偵測 replay</span><button onclick="document.getElementById(\'btReport\').remove()" style="margin-left:auto;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:4px 10px;cursor:pointer">✕</button></div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:15px;color:#e6edf3">🔬 回測報告 · '+sym+' '+bar+'</b><span style="color:#8b949e;font-size:11px">'+bars+' 根 ≈ '+days+' 天 · 淨值含手續費</span><button onclick="document.getElementById(\'btReport\').remove()" style="margin-left:auto;background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer">✕</button></div>'
       +'<div style="font-size:12px;color:#c9d1d9;line-height:1.9">'
-      +'<div style="padding:8px 10px;background:#0d1220;border-radius:7px;margin-bottom:8px"><b style="color:#58A6FF">總覽</b> &nbsp;'+cell(s.all)+'</div>'
-      +'<div style="font-weight:800;color:#e6edf3;margin:6px 0 3px">🃏 吃卡 vs 幾何（關鍵對照）</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('吃卡',s.card,'#F0B90B')+pair('幾何',s.geometry,'#8b949e')+'</div>'
-      +'<div style="font-weight:800;color:#e6edf3;margin:8px 0 3px">共振強度</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('共振≥3庫',s.r3,'#3fb950')+pair('共振<3庫',s.rlo,'#8b949e')+'</div>'
-      +'<div style="font-weight:800;color:#e6edf3;margin:8px 0 3px">分級</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('高勝率',s.high,'#F0B90B')+pair('小單',s.small,'#d29922')+pair('監測',s.watch,'#8b949e')+'</div>'
-      +'<div style="font-size:10px;color:#6e7681;margin-top:10px;line-height:1.6">※ v1 模型：限價等 12 根成交、持倉 72 根內判 TP/SL、同根保守算 SL、KZ 權重回測時略過。樣本小＝參考值；真正要信，看實盤 DB 累積（GATE 鐵律）。權重會依此數據調。</div>'
+      +'<div style="padding:8px 10px;background:#0d1220;border-radius:7px;margin-bottom:8px"><b style="color:#58A6FF">KZ 內（照 SOP 會打的）</b><br>'+cell(s.kz)+'</div>'
+      +'<div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'+pair('做多',s.long,'#3fb950')+pair('做空',s.short,'#f85149')+pair('時段外',s.off,'#6e7681')+pair('全部',s.all,'#8b949e')+'</div>'
+      +'<div style="font-weight:800;color:#e6edf3;margin:10px 0 3px">⏰ 各 KZ 拆開（決定哪段要留）</div><div style="display:grid;grid-template-columns:78px 1fr;gap:4px 8px">'
+      +['亞洲','倫敦','精華','紐約','尾盤'].map(function(z){ return pair(z,s.byKz[z],'#d29922'); }).join('')+'</div>'
+      +'<div style="font-size:10px;color:#6e7681;margin-top:10px;line-height:1.6">※ v0.52 模型＝與 TV 回測器同規格：順序式（掃→MSS→回 OTE62）、⑥ 停損≥'+(SEQ_MIN_RISK*100).toFixed(1)+'%、TP 2R、MSS 後 36 根失效、同根先算 SL、只用收盤 K。手續費：進場/止盈 maker 0.02%、停損 taker 0.05%（未計滑價與資金費率）。尚未平倉 '+(res.open||0)+' 筆不計。單一標的幾天樣本＝參考值，真正要信看模擬盤＋實盤累積。</div>'
       +'</div></div></div>';
     document.body.insertAdjacentHTML('beforeend', html);
   }
@@ -8253,7 +8293,7 @@ injectICTFlagshipGrid();
     if(!inst){ toast('找不到標的','warn'); return; }
     toast('🔬 回測中 · 抓 '+k+' '+window.TF+' 歷史…','normal');
     try{
-      var cs=await fetchHistory(inst, window.TF, 1000);
+      var cs=await fetchHistory(inst, window.TF, 3000);
       if(cs.length<80){ toast('歷史不足（'+cs.length+' 根）· 可能被擋','warn'); return; }
       var res=runBacktest(cs);
       if(!res.trades.length){ toast('這段歷史無觸發交易（'+cs.length+' 根）','warn'); return; }
@@ -8264,7 +8304,7 @@ injectICTFlagshipGrid();
 
   // 全部接真 · 階段2：每標的真共振分 → 驅動 5 張排位卡（取代 RANK_DB demo 顯示）
   function symbolResonance(k){
-    var cs=(window.CANDLES&&window.CANDLES[k])||[];
+    var cs=closedOnly((window.CANDLES&&window.CANDLES[k])||[]);
     if(cs.length<20) return {none:true,reason:'K線不足'};
     var d; try{ d=detectStructure(cs); }catch(_){ return {none:true}; } if(!d) return {none:true,reason:'結構未成形'};
     var sq=seqReplay(cs), lv=detectLevels(cs,d), prop=proposeSetup(d,lv,sq);
@@ -8277,7 +8317,7 @@ injectICTFlagshipGrid();
     var ch = prop.dir==='short' ? 'Ch5 · Ch11 · Ch13' : 'Ch10 · Ch13';
     var last=cs[cs.length-1];
     return {score:reso?reso.score:null, tier:reso?reso.tier:'watch', dir:prop.dir, model:model, fired:reso?reso.fired:0,
-            entry:prop.entry, sl:prop.sl, tp:prop.tp, rr:prop.rr, slSrc:prop.slSrc, enSrc:prop.enSrc, pos:prop.pos,
+            entry:prop.entry, sl:prop.sl, tp:prop.tp, rr:prop.rr, slSrc:prop.slSrc, enSrc:prop.enSrc, pos:prop.pos, preview:!!prop.preview, seqStage:prop.seqStage||0, riskPct:prop.riskPct,
             inKz:inKz, lights:reso?reso.lights:null, brk:reso?reso.brk:[], trig:trig, lv:lv, ch:ch,
             close:last?last.c:null, tms:last?last.t:null};
   }
@@ -8354,13 +8394,13 @@ injectICTFlagshipGrid();
   function _advStatus(r){ return (r.trig&&r.trig.triggered&&r.score>=65)?'active':(((r.pos>=0.55||r.pos<=0.45)&&r.score>=50)?'pending':'expired'); }
   function paintSmallZone(r){
     if(!r) return; var k=r.sym, isS=r.dir==='short';
-    if(r.none){ // 聚焦標的無小單設定 → 監測中（避免殘留舊值/NaN）
+    if(r.none||r.preview){ // 聚焦標的無小單設定（v0.52：無 🔵 也算，不出價） → 監測中（避免殘留舊值/NaN）
       try{ setCardStatus(document.querySelector('.smentry'), tradeStatus(r,65,false)); }catch(_){}
       var t0=document.querySelector('.smentry-title'); if(t0) t0.innerHTML='⚡ '+k+' · <span style="color:#6e7681">監測中</span>';
       var en0=document.getElementById('smEntry'); if(en0) en0.textContent='—';
       var sl0=document.querySelector('.sm-row[data-target-line="sl_small"] .v'); if(sl0) sl0.textContent='—';
       var tp0=document.querySelector('.sm-row[data-target-line="tp1"] .v'); if(tp0) tp0.textContent='—';
-      var c0=document.querySelector('.smentry-cond'); if(c0) c0.innerHTML='🃏 等結構成形 / 位置到折扣·溢價';
+      var c0=document.querySelector('.smentry-cond'); if(c0) c0.innerHTML=r.preview?('🃏 區位偏'+(isS?'空':'多')+' · 等順序式 🔵（已掃＋MSS）才出價'):'🃏 等結構成形 / 位置到折扣·溢價';
       var b0=document.getElementById('smBtn'); if(b0 && !b0.classList.contains('executed')) b0.textContent='監測中 · 等訊號';
       return;
     }
@@ -8470,9 +8510,9 @@ injectICTFlagshipGrid();
       for(var i=1;i<=5;i++){ if(RANK_DB[i]&&RANK_DB[i].sym===r.sym){
         var risk=Math.abs(r.entry-r.sl)||1, tp1=r.dir==='short'?(r.entry-risk):(r.entry+risk);
         RANK_DB[i].advisor={ model:r.model, side:r.dir, score:r.score, chapters:r.ch, status:_advStatus(r), conditions:_advConds(r) };
-        RANK_DB[i].small={ model:r.model, modelFull:r.model+' 短倉', side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:tp1, tp2:tp1, tp3:tp1, chapters:r.ch, narrative:'5M 短倉 1R' };
+        if(!r.preview) RANK_DB[i].small={ model:r.model, modelFull:r.model+' 短倉', side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:tp1, tp2:tp1, tp3:tp1, chapters:r.ch, narrative:'5M 短倉 1R' };
         // 高勝率卡接真（merge 保留 expiryMs/signalAt 等舊欄）→ 執行鈕打真值
-        RANK_DB[i].high=Object.assign({}, RANK_DB[i].high, { model:r.model, modelFull:r.model, side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:r.tp, chapters:r.ch });
+        if(!r.preview) RANK_DB[i].high=Object.assign({}, RANK_DB[i].high, { model:r.model, modelFull:r.model, side:r.dir, score:r.score, entry:r.entry, slMain:r.sl, slSmall:r.sl, tp1:r.tp, chapters:r.ch });
         break;
       } }
     });
