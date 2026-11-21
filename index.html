@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.53.5 · 🏆 案例 #007</span></div>
+    <div class="logo">smc-pro<span class="v">v0.53.6 · 🏆 案例 #007</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7369,9 +7369,10 @@ injectICTFlagshipGrid();
           L.riskPct=kL/fL; L.riskOk=kL>0&&L.riskPct>=SEQ_MIN_RISK;
           if(L.riskOk){ L.stage=3; L.fill=fL; L.tp=fL+2*kL; L.fireBar=i; out.nFireL++; out.fh=(out.fh*31+i%997+1)%1000003;
             L.ti=out.trades.length; out.trades.push({dir:'long',bar:i,t:c.t,fill:fL,sl:L.sl,tp:L.tp,riskPct:L.riskPct,outcome:null});
-            if(c.l<=L.sl){ out.trades[L.ti].outcome='sl'; out.trades[L.ti].exitBar=i; L={stage:0,done:'sl'}; }
             // v0.53.1 時段外成交＝當作沒打：記錄後立刻釋放（不佔位擋掉 KZ 內新設定）
-            else if(onlyKz&&!seqKzOk(c.t)){ out.trades[L.ti].outcome='offkz'; out.trades[L.ti].exitBar=i; L={stage:0,done:'offkz'}; } } }
+            // v0.53.6 時段外判定放在同根停損之前（與 Pine sigL=fire and in_kz 一致：時段外同根停損不記虧損）
+            if(onlyKz&&!seqKzOk(c.t)){ out.trades[L.ti].outcome='offkz'; out.trades[L.ti].exitBar=i; L={stage:0,done:'offkz'}; }
+            else if(c.l<=L.sl){ out.trades[L.ti].outcome='sl'; out.trades[L.ti].exitBar=i; L={stage:0,done:'sl'}; } } }
       if(swNow===1&&zone===1&&L.stage!==3){ L={stage:1,ext:c.l,armBar:i}; }
       if(L.stage===1&&i-L.armBar>SEQ_ARM_BARS) L={stage:0};
       var dL=L.stage===1&&evt>0&&swNow!==1;
@@ -7385,8 +7386,8 @@ injectICTFlagshipGrid();
           S.riskPct=kS/fS; S.riskOk=kS>0&&S.riskPct>=SEQ_MIN_RISK;
           if(S.riskOk){ S.stage=3; S.fill=fS; S.tp=fS-2*kS; S.fireBar=i; out.nFireS++; out.fh=(out.fh*31+i%997+501)%1000003;
             S.ti=out.trades.length; out.trades.push({dir:'short',bar:i,t:c.t,fill:fS,sl:S.sl,tp:S.tp,riskPct:S.riskPct,outcome:null});
-            if(c.h>=S.sl){ out.trades[S.ti].outcome='sl'; out.trades[S.ti].exitBar=i; S={stage:0,done:'sl'}; }
-            else if(onlyKz&&!seqKzOk(c.t)){ out.trades[S.ti].outcome='offkz'; out.trades[S.ti].exitBar=i; S={stage:0,done:'offkz'}; } } }
+            if(onlyKz&&!seqKzOk(c.t)){ out.trades[S.ti].outcome='offkz'; out.trades[S.ti].exitBar=i; S={stage:0,done:'offkz'}; }
+            else if(c.h>=S.sl){ out.trades[S.ti].outcome='sl'; out.trades[S.ti].exitBar=i; S={stage:0,done:'sl'}; } } }
       if(swNow===-1&&zone===3&&S.stage!==3){ S={stage:1,ext:c.h,armBar:i}; }
       if(S.stage===1&&i-S.armBar>SEQ_ARM_BARS) S={stage:0};
       var dS=S.stage===1&&evt<0&&swNow!==-1;
