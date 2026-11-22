@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.53.7 · 🏆 案例 #008</span></div>
+    <div class="logo">smc-pro<span class="v">v0.54.0 · 🌊 諧波補齊</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -4339,6 +4339,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 0.786', difficulty:2, winrate:4,
     fib_key:'AD/XA', fib_target:0.786,
     detect:{ ab:[0.55,0.68], bc:[0.35,0.90], cd:[1.10,1.70], ad:[0.73,0.85] },
+    spec:{type:'xabcd',ab:[0.55,0.68],bc:[0.382,0.886],cd:[1.13,1.618],ad:[0.75,0.82]},
+    trade:{sl:'X 外 5 pips；SMC 優先貼 OB 底', tp:'0.382 AD · 0.618 AD（TP1 平 50%＋移保）', time:'45–90 分', freq:'BTC 日均 2–4 次 · 有效 1–2', fit:'BTC★★★ ETH★★★ SOL★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 35 筆 −0.16R',
     hint:'D 點常落 Discount OB · MSS 後才進場'
   },
   '② Bat': {
@@ -4347,6 +4350,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 0.886', difficulty:3, winrate:4,
     fib_key:'AD/XA', fib_target:0.886,
     detect:{ ab:[0.35,0.52], bc:[0.35,0.90], cd:[1.55,2.70], ad:[0.86,0.92] },
+    spec:{type:'xabcd',ab:[0.35,0.52],bc:[0.382,0.886],cd:[1.618,2.618],ad:[0.86,0.92]},
+    trade:{sl:'X 外 3 pips（極緊）', tp:'0.382 AD · 0.886 XA', time:'60–120 分', freq:'日均 1–3 次', fit:'BTC★★★ ETH★★★ SOL★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 6 筆 −1.43R（樣本不足）',
     hint:'B 淺是特徵 · SL 可極緊'
   },
   '③ Alt Bat': {
@@ -4355,6 +4361,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 1.113', difficulty:4, winrate:3,
     fib_key:'AD/XA', fib_target:1.113,
     detect:{ ab:[0.35,0.42], bc:[0.35,0.90], cd:[1.90,3.70], ad:[1.08,1.15] },
+    spec:{type:'xabcd',ab:[0.30,0.42],bc:[0.382,0.886],cd:[2.0,3.618],ad:[1.08,1.15]},
+    trade:{sl:'X 外 1.15 XA', tp:'0.382 / 0.618 AD（TP1 平 60%）', time:'90–150 分', freq:'日均 0–1 次', fit:'BTC★★ ETH★★ SOL★ XRP★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'34 天未出現',
     hint:'SSL sweep 必要 · 無 MSS 禁進'
   },
   '④ Butterfly': {
@@ -4363,6 +4372,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 1.272', difficulty:3, winrate:4,
     fib_key:'AD/XA', fib_target:1.272,
     detect:{ ab:[0.75,0.82], bc:[0.35,0.90], cd:[1.55,2.30], ad:[1.24,1.32] },
+    spec:{type:'xabcd',ab:[0.75,0.82],bc:[0.382,0.886],cd:[1.618,2.24],ad:[1.24,1.32]},
+    trade:{sl:'D 外 8 pips', tp:'0.382 / 0.618 AD（TP2 近 A 點）', time:'60–120 分', freq:'日均 1–2 次', fit:'BTC★★★ ETH★★★ SOL★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 5 筆（樣本不足）',
     hint:'sweep 前 X · 折扣 OB 首選'
   },
   '⑤ Crab': {
@@ -4371,6 +4383,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 1.618', difficulty:3, winrate:4,
     fib_key:'AD/XA', fib_target:1.618,
     detect:{ ab:[0.35,0.65], bc:[0.35,0.90], cd:[2.50,3.70], ad:[1.58,1.66] },
+    spec:{type:'xabcd',ab:[0.382,0.618],bc:[0.382,0.886],cd:[2.24,3.618],ad:[1.58,1.66]},
+    trade:{sl:'D 外 10 pips', tp:'0.382 / 0.618 AD · A 點', time:'120–240 分', freq:'日均 0–1 次', fit:'BTC★★★ ETH★★★ SOL★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 1 筆（樣本不足）',
     hint:'極端延伸 · 必配深 OB + FVG 雙保護'
   },
   '⑥ Deep Crab': {
@@ -4379,6 +4394,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 1.618', difficulty:4, winrate:4,
     fib_key:'AD/XA', fib_target:1.618,
     detect:{ ab:[0.86,0.92], bc:[0.35,0.90], cd:[1.90,3.70], ad:[1.58,1.66] },
+    spec:{type:'xabcd',ab:[0.86,0.92],bc:[0.382,0.886],cd:[2.0,3.618],ad:[1.58,1.66]},
+    trade:{sl:'D 外 8 pips（縮倉）', tp:'0.382 / 0.618 AD（TP1 平 60%）', time:'90–180 分', freq:'日均 1–2 次', fit:'BTC★★★ ETH★★★ SOL★★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 4 筆（樣本不足）',
     hint:'B 極深假突後反轉 · crypto 常見'
   },
   '⑦ Shark': {
@@ -4387,6 +4405,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 0.886', difficulty:3, winrate:3,
     fib_key:'D 回撤 XC', fib_target:0.886,
     detect:{ ab:[0.45,0.55], bc:[1.10,1.70], cd:[0.45,0.90], ad:[0.85,1.15] },
+    spec:{type:'shark',bc:[1.13,1.618],dxc:[0.886,1.13]},
+    trade:{sl:'C 對側 5 pips', tp:'0.5 CD · A 點', time:'30–75 分', freq:'日均 3–5 次（最頻繁）', fit:'BTC★★★ ETH★★★ SOL★★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 325 筆 −0.53R；⑥≥0.4%＋KZ 50 筆 −0.07R',
     hint:'C 必突破 A · 5M 高頻適配'
   },
   '⑧ Cypher': {
@@ -4395,6 +4416,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 0.786', difficulty:4, winrate:3,
     fib_key:'AD/XA', fib_target:0.786,
     detect:{ ab:[0.35,0.65], bc_xa:[1.10,1.45], cd:[0.75,0.82], ad:[0.73,0.82] },
+    spec:{type:'cypher',ab:[0.382,0.618],xc:[1.13,1.414],dxc:[0.75,0.82]},
+    trade:{sl:'X 外 5 pips（或 OB）', tp:'0.382 CD · A 點', time:'60–120 分', freq:'日均 1–2 次', fit:'BTC★★★ ETH★★★ SOL★★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 20 筆 −0.34R',
     hint:'BC 段獨門擴展 · 必須配 OB+FVG'
   },
   '⑨ ABCD': {
@@ -4403,6 +4427,9 @@ const HARMONIC_PATTERNS = {
     prz:'PRZ 1:1', difficulty:1, winrate:3,
     fib_key:'CD/AB', fib_target:1.0,
     detect:{ ab:[0.9,1.1], bc:[0.55,0.68], cd:[1.15,1.65], ad:[0.9,1.1] },
+    spec:{type:'abcd',bc:[0.55,0.70],cd:[1.13,1.70],cdab:[0.90,1.10]},
+    trade:{sl:'D 對側 8 pips（D 附近新 OB）', tp:'0.382 / 0.618 CD（TP1 平 50%＋移保）', time:'30–60 分', freq:'日均 4–6 次', fit:'BTC★★★ ETH★★★ SOL★★ XRP★★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 105 筆 −0.31R；⑥＋KZ 24 筆 −0.02R',
     hint:'無 X 點 · 純 4 點 · 常作骨架'
   },
   '⑩ Three Drives': {
@@ -4411,6 +4438,9 @@ const HARMONIC_PATTERNS = {
     prz:'Drive 3 底', difficulty:5, winrate:4,
     fib_key:'D2/D1 · D3/D2', fib_target:1.272,
     detect:null,
+    spec:{type:'3d',r1:[0.55,0.70],e2:[1.20,1.70],r2:[0.55,0.70],e3:[1.20,1.70]},
+    trade:{sl:'Drive 3 外 10 pips', tp:'回檔 2 · 回檔 1', time:'180–300 分', freq:'日均 0–1 次', fit:'BTC★★★ ETH★★★ SOL★★ XRP★ TRX★', kz:'倫敦 15:00–17:00 ⭐⭐⭐ ／ 紐約 21:30–23:30 ⭐⭐⭐'},
+    bt34:'單獨進場 10 筆 −0.44R（幾何版，未含 CVD 背離）',
     hint:'3 推完成 · 必配 CVD 背離'
   }
 };
@@ -4493,6 +4523,15 @@ function runXABCDValidator() {
 
   let matches = [];
   Object.entries(HARMONIC_PATTERNS).forEach(([key, p]) => {
+    // v0.54.0：Shark / Cypher / ABCD 用各自正確量法（spec），完全符合＝100%
+    if (p.spec && p.spec.type !== 'xabcd' && p.spec.type !== '3d') {
+      const P = p.spec.type === 'abcd'
+        ? [{p:a,t:a>b?'H':'L'},{p:b,t:b>a?'H':'L'},{p:c,t:c>b?'H':'L'},{p:d,t:d>c?'H':'L'}]
+        : [{p:x,t:x>a?'H':'L'},{p:a,t:a>x?'H':'L'},{p:b,t:b>a?'H':'L'},{p:c,t:c>b?'H':'L'},{p:d,t:d>c?'H':'L'}];
+      const ok = window.smcHarmMatch ? window.smcHarmMatch(p.spec, P) : null;
+      matches.push({ key, pattern:p, score: ok?1:0, checks:1, pct: ok?100:0 });
+      return;
+    }
     if (!p.detect) return;
     const dt = p.detect;
     let score = 0, checks = 0;
@@ -4798,6 +4837,24 @@ function openTrendPanel(container) {
 }
 
 
+// v0.54.0 諧波資料庫：偵測規格＋交易參數＋34 天回測（顯示在詳情卡下方）
+function harmSpecBlock(p){
+  if(!p || !p.spec) return '';
+  const sp=p.spec, t=p.trade||{};
+  const lab={ab:'AB/XA',bc:(sp.type==='shark'||sp.type==='abcd')?'BC/AB':'BC/AB',cd:sp.type==='abcd'?'CD/BC':'CD/BC',ad:'AD/XA',dxc:'D 回撤 XC',xc:'XC/XA',cdab:'CD/AB',r1:'回檔1/推1',e2:'推2/回檔1',r2:'回檔2/推2',e3:'推3/回檔2'};
+  const rows=Object.keys(sp).filter(k=>k!=='type').map(k=>'<tr><td style="color:var(--text-dim);padding:2px 10px 2px 0">'+(lab[k]||k)+'</td><td style="font-family:var(--font-mono)">'+sp[k][0]+' – '+sp[k][1]+'</td></tr>').join('');
+  const tr=(k,v)=>v?'<tr><td style="color:var(--text-dim);padding:2px 10px 2px 0">'+k+'</td><td>'+v+'</td></tr>':'';
+  return '<div style="margin:10px 14px;padding:10px 12px;border:1px solid rgba(91,156,246,0.3);border-radius:8px;background:rgba(91,156,246,0.06);font-size:12px;line-height:1.6">'+
+    '<div style="font-weight:800;color:#79c0ff;margin-bottom:4px">🔎 自動偵測規格（'+({xabcd:'XABCD 五點',shark:'Shark：C 破 A＋D 回撤 XC',cypher:'Cypher：C 延伸 XA＋D 回撤 XC',abcd:'ABCD 四點',"3d":'三推（幾何版，未含 CVD 背離）'}[sp.type]||sp.type)+'）· 擺動 3／5／8 多尺度 · D 需在 30 根內</div>'+
+    '<table style="border-collapse:collapse">'+rows+'</table>'+
+    '<div style="font-weight:800;color:#d29922;margin:8px 0 4px">⚔️ 交易參數（規則書 Part 3）</div><table style="border-collapse:collapse">'+
+    tr('止損',t.sl)+tr('止盈',t.tp)+tr('完成耗時',t.time)+tr('出現頻率',t.freq)+tr('最佳 KZ',t.kz)+tr('五標的適配',t.fit)+'</table>'+
+    '<div style="font-weight:800;color:#f85149;margin:8px 0 4px">📊 34 天回測（2026/11/22，五幣 5M）</div>'+
+    '<div>'+(p.bt34||'—')+'</div>'+
+    '<div style="color:var(--text-dim);margin-top:4px">⚠ 諧波<b>單獨進場是負期望值</b>；疊在我們的「掃→MSS→OTE」訊號上（D 在 MSS 前 30 根內同向）：KZ 內 11 筆 +1.36R vs 沒有 +0.31R（兩段都較好，但樣本不足，只供參考、不加單）。諧波不授權進場，七條件仍要全過。</div>'+
+  '</div>';
+}
+
 // ---- 諧波詳情彈窗（完整旗艦 SVG）----
 function openHarmonicDetail(key, side) {
   side = side || 'long';
@@ -4835,7 +4892,7 @@ function openHarmonicDetail(key, side) {
       '</div>' +
       '<button class="atlas-close" onclick="this.closest(\'.harm-detail\').classList.add(\'alert-fadeout\');setTimeout(()=>this.closest(\'.harm-detail\')?.remove(),350)">✕</button>' +
     '</div>' +
-    svgBlock;
+    svgBlock + harmSpecBlock(p);
 
   buildAtlasNav(detail, Object.keys(HARMONIC_PATTERNS), key, openHarmonicDetail);
   document.body.appendChild(detail);
@@ -7528,30 +7585,40 @@ injectICTFlagshipGrid();
     return out;
   }
 
-  // 吃圖卡 · 庫4 諧波20：直接讀圖鑑 HARMONIC_PATTERNS 的 detect 比例範圍來比對 XABCD
-  function detectHarmonic(cs){
-    var out=[]; if(!cs||cs.length<20) return out;
+  // 吃圖卡 · 庫4 諧波20（v0.54.0 補齊）：多尺度擺動點（3/5/8）＋每型態正確量法（讀圖鑑 spec）
+  // xabcd＝Gartley/Bat/AltBat/Butterfly/Crab/DeepCrab；shark＝BC/AB＋D 回撤 XC；cypher＝C 延伸 XA＋D 回撤 XC；abcd＝4 點；3d＝三推（幾何版，未含 CVD 背離）
+  function harmSeq(cs,k){ var pv=swingPivots(cs,k,k), piv=[], seq=[];
+    pv.H.forEach(function(h){ piv.push({i:h.i,p:h.p,t:'H'}); }); pv.L.forEach(function(l){ piv.push({i:l.i,p:l.p,t:'L'}); });
+    piv.sort(function(a,b){ return a.i-b.i; });
+    piv.forEach(function(p){ var last=seq[seq.length-1];
+      if(last && last.t===p.t){ if((p.t==='H'&&p.p>last.p)||(p.t==='L'&&p.p<last.p)) seq[seq.length-1]=p; } else seq.push(p); });
+    return seq; }
+  function harmIn(v,r){ return v>=r[0]&&v<=r[1]; }
+  function harmMatch(s,P){ var n=P.length, r;
+    if(s.type==='3d'){ if(n<6) return null; var p=P.slice(-6), l1=Math.abs(p[1].p-p[0].p), q1=Math.abs(p[2].p-p[1].p), d2=Math.abs(p[3].p-p[2].p), q2=Math.abs(p[4].p-p[3].p), d3=Math.abs(p[5].p-p[4].p);
+      if(!(l1>0&&q1>0&&q2>0)) return null; var up=p[5].t==='H', mono=up?(p[3].p>p[1].p&&p[5].p>p[3].p):(p[3].p<p[1].p&&p[5].p<p[3].p);
+      r={r1:q1/l1,e2:d2/q1,r2:q2/d2,e3:d3/q2}; return (mono&&harmIn(r.r1,s.r1)&&harmIn(r.e2,s.e2)&&harmIn(r.r2,s.r2)&&harmIn(r.e3,s.e3))?{r:r,D:p[5],X:p[0]}:null; }
+    if(s.type==='abcd'){ if(n<4) return null; var A4=P[n-4],B4=P[n-3],C4=P[n-2],D4=P[n-1], ab=Math.abs(B4.p-A4.p), bc=Math.abs(C4.p-B4.p), cd=Math.abs(D4.p-C4.p); if(!(ab>0&&bc>0)) return null;
+      r={bc:bc/ab,cd:cd/bc,cdab:cd/ab}; var ext=D4.t==='L'?D4.p<B4.p:D4.p>B4.p;
+      return (ext&&harmIn(r.bc,s.bc)&&harmIn(r.cd,s.cd)&&harmIn(r.cdab,s.cdab))?{r:r,D:D4,X:A4}:null; }
+    if(n<5) return null; var X=P[n-5],A=P[n-4],B=P[n-3],C=P[n-2],D=P[n-1], XA=Math.abs(A.p-X.p), AB=Math.abs(B.p-A.p), BC=Math.abs(C.p-B.p), CD=Math.abs(D.p-C.p), XC=Math.abs(C.p-X.p);
+    if(!(XA>0&&AB>0&&BC>0)) return null;
+    if(s.type==='xabcd'){ r={ab:AB/XA,bc:BC/AB,cd:CD/BC,ad:Math.abs(D.p-A.p)/XA}; return (harmIn(r.ab,s.ab)&&harmIn(r.bc,s.bc)&&harmIn(r.cd,s.cd)&&harmIn(r.ad,s.ad))?{r:r,D:D,X:X}:null; }
+    var cBeyond=A.t==='H'?C.p>A.p:C.p<A.p;
+    if(s.type==='shark'){ r={bc:BC/AB,dxc:CD/XC}; return (cBeyond&&harmIn(r.bc,s.bc)&&harmIn(r.dxc,s.dxc))?{r:r,D:D,X:X}:null; }
+    if(s.type==='cypher'){ r={ab:AB/XA,xc:XC/XA,dxc:CD/XC}; return (cBeyond&&harmIn(r.ab,s.ab)&&harmIn(r.xc,s.xc)&&harmIn(r.dxc,s.dxc))?{r:r,D:D,X:X}:null; }
+    return null; }
+  window.smcHarmMatch=harmMatch;
+  function detectHarmonic(cs, opt){
+    var out=[]; if(!cs||cs.length<30) return out;
     var HP; try{ HP=(typeof HARMONIC_PATTERNS!=='undefined')?HARMONIC_PATTERNS:(window.HARMONIC_PATTERNS||null); }catch(_){ HP=null; }
     if(!HP) return out;
-    var pv=swingPivots(cs,3,3), piv=[];
-    pv.H.forEach(function(h){ piv.push({i:h.i,p:h.p,t:'H'}); });
-    pv.L.forEach(function(l){ piv.push({i:l.i,p:l.p,t:'L'}); });
-    piv.sort(function(a,b){ return a.i-b.i; });
-    var seq=[]; // 交替高低，連續同型取更極端
-    piv.forEach(function(p){ var last=seq[seq.length-1];
-      if(last && last.t===p.t){ if((p.t==='H'&&p.p>last.p)||(p.t==='L'&&p.p<last.p)) seq[seq.length-1]=p; }
-      else seq.push(p); });
-    if(seq.length<5) return out;
-    var X=seq[seq.length-5],A=seq[seq.length-4],B=seq[seq.length-3],C=seq[seq.length-2],D=seq[seq.length-1];
-    var XA=Math.abs(A.p-X.p), AB=Math.abs(B.p-A.p), BC=Math.abs(C.p-B.p), CD=Math.abs(D.p-C.p), AD=Math.abs(D.p-A.p);
-    if(XA<=0||AB<=0||BC<=0) return out;
-    var rAB=AB/XA, rBC=BC/AB, rCD=CD/BC, rAD=AD/XA;
-    var dir = D.t==='L' ? 'long' : 'short';   // 諧波完成在低點→做多，高點→做空
-    for(var key in HP){ var h=HP[key], d=h&&h.detect; if(!d||!d.ab||!d.bc||!d.cd||!d.ad) continue;
-      if(rAB>=d.ab[0]&&rAB<=d.ab[1] && rBC>=d.bc[0]&&rBC<=d.bc[1] && rCD>=d.cd[0]&&rCD<=d.cd[1] && rAD>=d.ad[0]&&rAD<=d.ad[1]){
-        out.push({num:(h.code?'H'+h.code:'H'),name:key.replace(/^[①-⑳]\s?/,''),dir:dir,note:(h.prz||'')+' · AD/XA '+rAD.toFixed(2)});
-      }
-    }
+    var maxAge=(opt&&opt.maxAge!=null)?opt.maxAge:30, seen={}, N=cs.length;
+    [3,5,8].forEach(function(k){ var seq=harmSeq(cs,k); if(seq.length<4) return;
+      for(var key in HP){ var h=HP[key], sp=h&&h.spec; if(!sp||seen[h.code]) continue;
+        var m=harmMatch(sp,seq); if(!m||(N-1-m.D.i)>maxAge) continue; seen[h.code]=1;
+        out.push({num:'H'+h.code,name:key.replace(/^[①-⑳]\s?/,''),dir:m.D.t==='L'?'long':'short',scale:k,dPrice:m.D.p,
+          note:(h.prz||'')+' · 擺動'+k+' · D 距今 '+(N-1-m.D.i)+' 根'}); } });
     return out;
   }
 
