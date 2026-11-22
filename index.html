@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.54.1 · 🏆 實戰 #009–#010</span></div>
+    <div class="logo">smc-pro<span class="v">v0.55.0 · 🛑 停手開關＋執行檢討</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -8738,10 +8738,21 @@ injectICTFlagshipGrid();
 .pcal-trade .del{width:24px;height:24px;border-radius:6px;background:transparent;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:12px}
 .pcal-trade .del:hover{background:var(--red);color:#fff;border-color:var(--red)}
 .pcal-empty{text-align:center;padding:22px;color:var(--text-dim);font-size:12.5px}
+.pc-tag{font-size:11.5px;padding:4px 9px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text-mid);cursor:pointer}
+.pc-tag.on{background:rgba(248,81,73,.18);border-color:var(--red);color:var(--red);font-weight:800}
+.pc-tag[data-t="守紀律"].on{background:rgba(63,185,80,.18);border-color:var(--green);color:var(--green)}
+#smcStopBanner{position:fixed;left:0;right:0;top:0;z-index:99998;background:#b62324;color:#fff;font-weight:800;font-size:13px;text-align:center;padding:7px 10px;box-shadow:0 2px 10px rgba(0,0,0,.4);cursor:pointer}
+#smcStopOverlay{position:fixed;inset:0;z-index:99999;background:rgba(80,0,0,.92);display:flex;align-items:center;justify-content:center;padding:20px}
+#smcStopOverlay .box{max-width:460px;background:#1a0d10;border:2px solid #f85149;border-radius:14px;padding:22px 20px;text-align:center;color:#e6edf3}
+#smcStopOverlay h2{margin:0 0 8px;color:#ff6b62;font-size:26px}
+#smcStopOverlay p{margin:6px 0;font-size:14px;line-height:1.6}
+#smcStopOverlay button{margin-top:14px;padding:10px 18px;border-radius:8px;border:1px solid #f85149;background:transparent;color:#ff6b62;font-weight:800;font-size:14px;cursor:pointer}
+body.smc-stopped .rs-exec,body.smc-stopped .card-execute-btn,body.smc-stopped .wd-btn.execute,body.smc-stopped .adv-execute{opacity:.35;filter:grayscale(1);pointer-events:none}
 </style>
 <script>
 (function(){
   var PJ_KEY='smcpro_pnl_journal_v1';
+  var EXEC_TAGS=['守紀律','追單','提早平倉','移動停損','超過停手線','時段外','逆勢','沒截圖驗證','倉位算錯'];
   function readJ(){ try{ return JSON.parse(localStorage.getItem(PJ_KEY)||'[]'); }catch(_){ return []; } }
   function writeJ(a){ try{ localStorage.setItem(PJ_KEY, JSON.stringify(a)); }catch(_){} }
   function _toast(m,t){ if(typeof window.showToast==='function') window.showToast(m,t||'normal'); }
@@ -8776,19 +8787,21 @@ injectICTFlagshipGrid();
     var r=(q('pcR')||{}).value;
     var note=((q('pcNote')||{}).value||'').trim();
     var acct=((q('pcAcct')||{}).value==='real')?'real':'paper';
+    var tags=[]; if(BD){ BD.querySelectorAll('.pc-tag.on').forEach(function(b){ tags.push(b.getAttribute('data-t')); }); }
     if(pnlRaw===''||isNaN(+pnlRaw)){ _toast('請填盈虧金額（USDT，賠填負數）','warn'); return; }
     var all=readJ();
-    all.push({ id:'pj'+Date.now()+Math.floor(Math.random()*1000), date:ds, sym:sym, side:side, pnl:+pnlRaw, rr:(r===''?null:+r), note:note, ts:Date.now(), source:'manual', acct:acct });
+    all.push({ id:'pj'+Date.now()+Math.floor(Math.random()*1000), date:ds, sym:sym, side:side, pnl:+pnlRaw, rr:(r===''?null:+r), note:note, tags:tags, ts:Date.now(), source:'manual', acct:acct });
     writeJ(all); S.sel=ds; S.form=false; var p=ds.slice(0,7).split('-'); S.y=+p[0]; S.m=+p[1]-1;
-    _toast('✅ 已記一筆：'+(acct==='real'?'【實盤】':'【模擬】')+sym+' '+fmt(+pnlRaw)+'U','normal'); render();
+    _toast('✅ 已記一筆：'+(acct==='real'?'【實盤】':'【模擬】')+sym+' '+fmt(+pnlRaw)+'U','normal'); render(); if(window.smcStopCheck) window.smcStopCheck(true);
   };
-  window.pcDel=function(id){ var all=readJ().filter(function(e){return e.id!==id;}); writeJ(all); _toast('已刪除一筆','normal'); render(); };
+  window.pcTag=function(b){ b.classList.toggle('on'); if(b.getAttribute('data-t')==='守紀律' && b.classList.contains('on')){ BD.querySelectorAll('.pc-tag.on').forEach(function(x){ if(x!==b) x.classList.remove('on'); }); } else if(b.classList.contains('on')){ var ok=BD.querySelector('.pc-tag[data-t="守紀律"]'); if(ok) ok.classList.remove('on'); } };
+  window.pcDel=function(id){ var all=readJ().filter(function(e){return e.id!==id;}); writeJ(all); _toast('已刪除一筆','normal'); render(); if(window.smcStopCheck) window.smcStopCheck(true); };
   window.pcExport=function(){
     var all=readJ(); if(!all.length){ _toast('尚無記錄可匯出','warn'); return; }
-    var head='date,account,symbol,side,pnl_usdt,rr,result,note,source\n';
+    var head='date,account,symbol,side,pnl_usdt,rr,result,exec_tags,note,source\n';
     var body=all.slice().sort(function(a,b){return a.date<b.date?-1:1;}).map(function(e){
       var res=(+e.pnl>0?'win':(+e.pnl<0?'loss':'be'));
-      return [e.date,acctOf(e),e.sym,e.side,e.pnl,(e.rr==null?'':e.rr),res,'"'+(e.note||'').replace(/"/g,'""')+'"',e.source||'manual'].join(',');
+      return [e.date,acctOf(e),e.sym,e.side,e.pnl,(e.rr==null?'':e.rr),res,'"'+((e.tags||[]).join('|'))+'"','"'+(e.note||'').replace(/"/g,'""')+'"',e.source||'manual'].join(',');
     }).join('\n');
     var blob=new Blob([head+body],{type:'text/csv;charset=utf-8'}); var url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download='smc-pnl-journal-'+todayStr()+'.csv'; document.body.appendChild(a); a.click(); a.remove();
@@ -8826,7 +8839,7 @@ injectICTFlagshipGrid();
       var dh='<div class="pcal-detail-h">📌 '+S.sel+' <span class="net" style="color:'+(dnet>0?'var(--green)':(dnet<0?'var(--red)':'var(--text-mid)'))+'">'+fmt(dnet)+' U</span></div>';
       var rows = de.length? de.map(function(e){
         var res=+e.pnl>0?'var(--green)':(+e.pnl<0?'var(--red)':'var(--text-mid)');
-        return '<div class="pcal-trade"><span class="sd '+e.side+'">'+(e.side==='short'?'▼空':'▲多')+'</span><span class="sym">'+e.sym+'</span><span style="font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;'+(acctOf(e)==='real'?'background:rgba(248,81,73,.15);color:var(--red)':'background:rgba(210,153,34,.15);color:var(--amber)')+'">'+(acctOf(e)==='real'?'實盤':'模擬')+'</span>'+(e.rr!=null?'<span class="rr">'+e.rr+'R</span>':'')+'<span class="note">'+(e.note||'')+'</span><span class="amt" style="color:'+res+'">'+fmt(+e.pnl)+'</span><button class="del" onclick="pcDel(\''+e.id+'\')" title="刪除">✕</button></div>';
+        return '<div class="pcal-trade"><span class="sd '+e.side+'">'+(e.side==='short'?'▼空':'▲多')+'</span><span class="sym">'+e.sym+'</span><span style="font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;'+(acctOf(e)==='real'?'background:rgba(248,81,73,.15);color:var(--red)':'background:rgba(210,153,34,.15);color:var(--amber)')+'">'+(acctOf(e)==='real'?'實盤':'模擬')+'</span>'+(e.rr!=null?'<span class="rr">'+e.rr+'R</span>':'')+((e.tags||[]).map(function(t){ return '<span style="font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;'+(t==='守紀律'?'background:rgba(63,185,80,.15);color:var(--green)':'background:rgba(248,81,73,.15);color:var(--red)')+'">'+t+'</span>'; }).join(''))+'<span class="note">'+(e.note||'')+'</span><span class="amt" style="color:'+res+'">'+fmt(+e.pnl)+'</span><button class="del" onclick="pcDel(\''+e.id+'\')" title="刪除">✕</button></div>';
       }).join('') : '<div class="pcal-empty">這天還沒有記錄 — 按「＋ 記一筆」補登</div>';
       detail='<div class="pcal-detail">'+dh+rows+'</div>';
     }
@@ -8841,6 +8854,7 @@ injectICTFlagshipGrid();
           '<label>帳戶<select id="pcAcct"><option value="paper"'+(curMode()==='paper'?' selected':'')+'>模擬盤</option><option value="real"'+(curMode()==='real'?' selected':'')+'>實盤</option></select></label>'+
         '</div>'+
         '<div class="row full"><label>盈虧（USDT，賠填負數）<input type="number" id="pcPnl" step="0.01" placeholder="例：+15.5 或 -8"></label></div>'+
+        '<div class="row full"><label>執行檢討（可複選；沒犯錯就點「守紀律」）<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">'+EXEC_TAGS.map(function(t){ return '<button type="button" class="pc-tag" data-t="'+t+'" onclick="pcTag(this)">'+t+'</button>'; }).join('')+'</div></label></div>'+
         '<div class="row full"><label>備註（選填）<input type="text" id="pcNote" placeholder="例：⑪ 倫敦Judas · OB回踩 · 守紀律"></label></div>'+
         '<div class="acts"><button class="btn cancel" onclick="pcToggleForm()">取消</button><button class="btn save" onclick="pcSave()">✅ 存入日曆</button></div>'+
       '</div>';
@@ -8865,6 +8879,11 @@ injectICTFlagshipGrid();
               +(hit?'🛑 <b style="color:var(--red)">已達週停損</b> · 本週到週一前不再下單':'🗓️ 本週（週一起）')
               +' · '+(md==='real'?'實盤':'模擬盤')+' <b style="color:'+(wn>0?'var(--green)':(wn<0?'var(--red)':'var(--text-mid)'))+'">'+fmt(wn)+'U</b>（'+(oneR>0?(Math.round(wn/oneR*10)/10):0)+'R）'
               +' · 週停損線 −5R = '+Math.round(lim)+'U · '+wk.length+' 筆</div>'; })()+
+          (function(){ var md=curMode(), mm=me.filter(function(e){return acctOf(e)===md;}), cnt={}, n=0, ok=0;
+            mm.forEach(function(e){ var t=e.tags||[]; if(!t.length) return; n++; if(t.indexOf('守紀律')>=0) ok++; t.forEach(function(x){ if(x!=='守紀律') cnt[x]=(cnt[x]||0)+1; }); });
+            if(!n) return '<div style="margin:6px 0;font-size:11.5px;color:var(--text-dim)">🧠 執行檢討：本月還沒有標記（記一筆時點選標籤，30 筆對照時才分得出「系統問題」還是「執行問題」）</div>';
+            var top=Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a];}).slice(0,3).map(function(k){ return '<b style="color:var(--red)">'+k+' ×'+cnt[k]+'</b>'; }).join('、');
+            return '<div style="margin:6px 0;padding:7px 10px;border-radius:8px;border:1px solid var(--border);font-size:12px">🧠 執行檢討（'+(md==='real'?'實盤':'模擬')+'，'+n+' 筆有標記）· 守紀律 <b style="color:var(--green)">'+Math.round(ok/n*100)+'%</b>（GATE ④ 需 ≥90%）'+(top?' · 最常犯：'+top:'')+'</div>'; })()+
           '<div class="pcal-dow">'+dow+'</div>'+
           '<div class="pcal-grid">'+cells+'</div>'+
           (tradingDays? '<div class="pcal-best">本月最佳日：<b style="color:var(--green)">'+(best?best.slice(5)+' '+fmt(a.days[best]):'—')+'</b>　最差日：<b style="color:var(--red)">'+(worst?worst.slice(5)+' '+fmt(a.days[worst]):'—')+'</b></div>' : '')+
@@ -8877,6 +8896,43 @@ injectICTFlagshipGrid();
     if(!BD || !document.body.contains(BD)){ BD=document.createElement('div'); BD.id='pcalBackdrop'; BD.className='pcal-backdrop'; BD.onclick=window.closePnlCal; document.body.appendChild(BD); }
     BD.innerHTML=html;
   }
+
+  /* ★ v0.55 停手開關（Kill Switch）：日停 3 單或 −2R、週停 −5R → 全畫面紅色提醒＋執行按鈕鎖住，到隔天／下週一才解 */
+  function stopState(){
+    var md=curMode(), all=readJ().filter(function(e){ return acctOf(e)===md; });
+    var rc=(window.smcRiskCfg?window.smcRiskCfg():{cap:800,risk:1}), oneR=(rc.cap*rc.risk/100)||8;
+    var td=todayStr(), ws=weekStart();
+    var day=all.filter(function(e){return e.date===td;}), wk=all.filter(function(e){return e.date>=ws;});
+    var dR=day.reduce(function(t,e){return t+(+e.pnl||0);},0)/oneR, wR=wk.reduce(function(t,e){return t+(+e.pnl||0);},0)/oneR;
+    var why=[];
+    if(wR<=-5) why.push({lvl:'week',txt:'本週 '+(Math.round(wR*10)/10)+'R（週停 −5R）'});
+    if(day.length>=3) why.push({lvl:'day',txt:'今天已 '+day.length+' 單（日停 3 單）'});
+    if(dR<=-2) why.push({lvl:'day',txt:'今天 '+(Math.round(dR*10)/10)+'R（日停 −2R）'});
+    return {md:md,why:why,key:md+'|'+td+'|'+why.map(function(w){return w.txt;}).join(';')};
+  }
+  function untilTxt(st){ return st.why.some(function(w){return w.lvl==='week';})?'下週一 00:00':'明天 00:00'; }
+  window.smcStopCheck=function(fromSave){
+    var st=stopState(), b=document.getElementById('smcStopBanner');
+    if(!st.why.length){ document.body.classList.remove('smc-stopped'); if(b) b.remove(); var o0=document.getElementById('smcStopOverlay'); if(o0) o0.remove(); return st; }
+    document.body.classList.add('smc-stopped');
+    var msg='🛑 '+(st.md==='real'?'實盤':'模擬盤')+'停手中 · '+st.why.map(function(w){return w.txt;}).join(' · ')+' · '+untilTxt(st)+' 解鎖 · 只看不打';
+    if(!b){ b=document.createElement('div'); b.id='smcStopBanner'; b.onclick=function(){ showOv(stopState()); }; document.body.appendChild(b); }
+    b.textContent=msg;
+    var seen=''; try{ seen=sessionStorage.getItem('smc_stop_seen')||''; }catch(_){}
+    if(seen!==st.key || fromSave) showOv(st);
+    return st;
+  };
+  function showOv(st){
+    if(!st.why.length || document.getElementById('smcStopOverlay')) return;
+    var o=document.createElement('div'); o.id='smcStopOverlay';
+    o.innerHTML='<div class="box"><h2>🛑 今日停手</h2><p>'+st.why.map(function(w){return '• '+w.txt;}).join('<br>')+'</p><p style="color:#ffb3ad">SOP 停手線已到。'+untilTxt(st)+' 前不再下單。<br>執行按鈕已鎖住；可以看盤、記錄、做卡。</p><p style="font-size:12px;color:#9aa4b2">照規則也會輸 · 停手是保護下一筆，不是處罰</p><button id="smcStopOk">我知道了 · 只看不打</button></div>';
+    document.body.appendChild(o);
+    o.querySelector('#smcStopOk').onclick=function(){ try{ sessionStorage.setItem('smc_stop_seen',st.key); }catch(_){} o.remove(); };
+  }
+  function wrapExec(name){ var f=window[name]; if(typeof f!=='function'||f.__stopWrapped) return; var g=function(){ var st=stopState(); if(st.why.length){ _toast('🛑 停手中：'+st.why.map(function(w){return w.txt;}).join(' · ')+' → 只看不打','warn'); window.smcStopCheck(false); return; } return f.apply(this,arguments); }; g.__stopWrapped=true; window[name]=g; }
+  function boot(){ wrapExec('execHighTrade'); wrapExec('execAdvisorTrade'); window.smcStopCheck(false); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(boot,800); }); else setTimeout(boot,800);
+  setInterval(function(){ window.smcStopCheck(false); },60000);
 })();
 </script>
 <script>
