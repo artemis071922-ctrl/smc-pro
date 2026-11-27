@@ -2429,7 +2429,7 @@ body {
 <div class="app">
 
   <header class="topbar">
-    <div class="logo">smc-pro<span class="v">v0.55.3 · 🏆 實戰 #013</span></div>
+    <div class="logo">smc-pro<span class="v">v0.56.0 · 🃏 實測卡 T001/T002</span></div>
     <div class="kz-clock">
       <span class="kz-name" id="kzName">LOKZ</span>
       <span class="kz-time" id="kzTime">15:18:42</span>
@@ -7371,6 +7371,18 @@ injectICTFlagshipGrid();
   // 停損＝掃點外（腿長 3% 緩衝）、TP＝2R；⑥ 停損距離 ≥ SEQ_MIN_RISK 才算有效。
   // 與 TV Pine「SMC訊號」v4 逐根同一套邏輯（結構核心＝ICT 統一規格 v1）。
   var SEQ_MIN_RISK=0.004, SEQ_OTE=0.62, SEQ_ARM_BARS=24, SEQ_MSS_BARS=36;
+  // v0.56.0 與 TV SIG v4.9.6 同步：止損位置（前高收針試行／掃點外原版）＋實測卡 T001／T002＋數據日（台灣時間，Claude 每週日更新，與 TV 輸入同一串）
+  var SMC_EVENTS='2026-11-25 21:30,2026-12-01 23:00,2026-12-03 23:00,2026-12-04 21:30,2026-12-04 23:00,2026-12-09 23:00,2026-12-10 03:00,2026-12-10 21:30';
+  window.SMC_EVENTS=SMC_EVENTS;
+  function smcEvTimes(){ return String(window.SMC_EVENTS||'').split(',').map(function(x){ x=x.trim(); var m=x.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/); return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-8,+m[5]):null; }).filter(function(v){return v!=null;}); }
+  function smcDataDay(t){ var ev=smcEvTimes(), dd=false, nw=false, nx=null;
+    ev.forEach(function(e){ if(t>=e-30*60000&&t<=e+24*3600000) dd=true; if(Math.abs(t-e)<=30*60000) nw=true; if(e>t&&(nx==null||e<nx)) nx=e; });
+    return {dd:dd, noWin:nw, next:nx}; }
+  window.smcDataDay=smcDataDay;
+  function smcSlMode(){ try{ return localStorage.getItem('smc_sl_mode')||'wick'; }catch(_){ return 'wick'; } }
+  window.smcSetSlMode=function(m){ try{ localStorage.setItem('smc_sl_mode',m); }catch(_){} try{ if(typeof window.showToast==='function') window.showToast('止損位置：'+(m==='wick'?'前高收針（試行）':'掃點外（原版）'),'ok'); }catch(_){} };
+  function smcKzId(t){ var d=new Date(t), u=d.getUTCHours()*60+d.getUTCMinutes();
+    return (u>=120&&u<300)?1:(u>=420&&u<600)?2:(u>=810&&u<960)?3:(u>=1200&&u<1320)?4:((u>=600&&u<660)||(u>=780&&u<840))?5:0; }
   window.SEQ_MIN_RISK=SEQ_MIN_RISK;
   // v0.52 收盤鐵律：結構/順序式只用已收盤 K（OKX confirm=0 的形成中那根剔除）；即時價只用來看是否觸及 OTE
   function closedOnly(cs){ return (cs&&cs.length&&cs[cs.length-1].confirm===0)?cs.slice(0,-1):(cs||[]); }
@@ -7399,9 +7411,12 @@ injectICTFlagshipGrid();
     var N=cs?cs.length:0, out={L:{stage:0},S:{stage:0},nFireL:0,nFireS:0,fh:0,trades:[]};
     if(N<12) return out;
     var jH=null,jHp=null,jL=null,jLp=null, evDone=false, lastEvBi=null, lastEvCode=0;
-    var L={stage:0}, S={stage:0};
+    var L={stage:0}, S={stage:0}, bigH=null, bigL=null, mTrend=0;
     for(var i=0;i<N;i++){
       var c=cs[i], prevH=jH, prevL=jL, isPH=false, isPL=false;
+      if(i>=120){ var pc=cs[i-60], bh=true, bl=true; for(var q=i-120;q<=i;q++){ if(q===i-60) continue; if(cs[q].h>=pc.h) bh=false; if(cs[q].l<=pc.l) bl=false; } if(bh) bigH=pc.h; if(bl) bigL=pc.l; }
+      mTrend=(bigH!=null&&c.c>bigH)?1:((bigL!=null&&c.c<bigL)?-1:mTrend);
+      var lo13=Infinity, hi13=-Infinity; for(var q2=Math.max(0,i-12);q2<=i;q2++){ if(cs[q2].l<lo13) lo13=cs[q2].l; if(cs[q2].h>hi13) hi13=cs[q2].h; }
       if(i>=6){ var p=cs[i-3]; isPH=true; isPL=true;
         for(var k=i-6;k<=i;k++){ if(k===i-3) continue; if(!(p.h>cs[k].h)) isPH=false; if(!(p.l<cs[k].l)) isPL=false; } }
       if(isPH){ jHp=jH; jH=cs[i-3].h; }
@@ -7425,37 +7440,56 @@ injectICTFlagshipGrid();
       if(L.stage===2&&c.l<=L.ote){ var fL=Math.min(c.o,L.ote), kL=fL-L.sl;
           L.riskPct=kL/fL; L.riskOk=kL>0&&L.riskPct>=SEQ_MIN_RISK;
           if(L.riskOk){ L.stage=3; L.fill=fL; L.tp=fL+2*kL; L.fireBar=i; out.nFireL++; out.fh=(out.fh*31+i%997+1)%1000003;
-            L.ti=out.trades.length; out.trades.push({dir:'long',bar:i,t:c.t,fill:fL,sl:L.sl,tp:L.tp,riskPct:L.riskPct,outcome:null});
+            L.wait=i-L.mssBar; L.ti=out.trades.length; out.trades.push({dir:'long',bar:i,t:c.t,fill:fL,sl:L.sl,wsl:L.wsl,tp:L.tp,riskPct:L.riskPct,wait:L.wait,trend:mTrend,outcome:null});
             // v0.53.1 時段外成交＝當作沒打：記錄後立刻釋放（不佔位擋掉 KZ 內新設定）
             // v0.53.6 時段外判定放在同根停損之前（與 Pine sigL=fire and in_kz 一致：時段外同根停損不記虧損）
             if(onlyKz&&!seqKzOk(c.t)){ out.trades[L.ti].outcome='offkz'; out.trades[L.ti].exitBar=i; L={stage:0,done:'offkz'}; }
             else if(c.l<=L.sl){ out.trades[L.ti].outcome='sl'; out.trades[L.ti].exitBar=i; L={stage:0,done:'sl'}; } } }
-      if(swNow===1&&zone===1&&L.stage!==3){ L={stage:1,ext:c.l,armBar:i}; }
+      if(swNow===1&&zone===1&&L.stage!==3){ L={stage:1,ext:c.l,armBar:i,ex13:lo13}; }
       if(L.stage===1&&i-L.armBar>SEQ_ARM_BARS) L={stage:0};
       var dL=L.stage===1&&evt>0&&swNow!==1;
       if(dL){ L.stage=2; L.leg=c.h; L.mssBar=i; }
       else if(L.stage===2){ L.leg=Math.max(L.leg,c.h); }
-      if(L.stage===2){ var rL=L.leg-L.ext; L.ote=L.leg-SEQ_OTE*rL; L.sl=L.ext-0.03*rL; }
+      if(L.stage===2){ var rL=L.leg-L.ext; L.ote=L.leg-SEQ_OTE*rL; L.sl=L.ext-0.03*rL; L.wsl=Math.min(L.sl,L.ex13!=null?L.ex13:L.sl); }
       if(L.stage===2&&(c.c<=L.ext||i-L.mssBar>SEQ_MSS_BARS)) L={stage:0};
       // ── 做空（鏡像）──
       if(S.stage===3){ if(c.h>=S.sl||c.l<=S.tp){ var _dS=(c.h>=S.sl?'sl':'tp'); if(S.ti!=null){ out.trades[S.ti].outcome=_dS; out.trades[S.ti].exitBar=i; } S={stage:0,done:_dS}; } }
       if(S.stage===2&&c.h>=S.ote){ var fS=Math.max(c.o,S.ote), kS=S.sl-fS;
           S.riskPct=kS/fS; S.riskOk=kS>0&&S.riskPct>=SEQ_MIN_RISK;
           if(S.riskOk){ S.stage=3; S.fill=fS; S.tp=fS-2*kS; S.fireBar=i; out.nFireS++; out.fh=(out.fh*31+i%997+501)%1000003;
-            S.ti=out.trades.length; out.trades.push({dir:'short',bar:i,t:c.t,fill:fS,sl:S.sl,tp:S.tp,riskPct:S.riskPct,outcome:null});
+            S.wait=i-S.mssBar; S.ti=out.trades.length; out.trades.push({dir:'short',bar:i,t:c.t,fill:fS,sl:S.sl,wsl:S.wsl,tp:S.tp,riskPct:S.riskPct,wait:S.wait,trend:mTrend,outcome:null});
             if(onlyKz&&!seqKzOk(c.t)){ out.trades[S.ti].outcome='offkz'; out.trades[S.ti].exitBar=i; S={stage:0,done:'offkz'}; }
             else if(c.h>=S.sl){ out.trades[S.ti].outcome='sl'; out.trades[S.ti].exitBar=i; S={stage:0,done:'sl'}; } } }
-      if(swNow===-1&&zone===3&&S.stage!==3){ S={stage:1,ext:c.h,armBar:i}; }
+      if(swNow===-1&&zone===3&&S.stage!==3){ S={stage:1,ext:c.h,armBar:i,ex13:hi13}; }
       if(S.stage===1&&i-S.armBar>SEQ_ARM_BARS) S={stage:0};
       var dS=S.stage===1&&evt<0&&swNow!==-1;
       if(dS){ S.stage=2; S.leg=c.l; S.mssBar=i; }
       else if(S.stage===2){ S.leg=Math.min(S.leg,c.l); }
-      if(S.stage===2){ var rS=S.ext-S.leg; S.ote=S.leg+SEQ_OTE*rS; S.sl=S.ext+0.03*rS; }
+      if(S.stage===2){ var rS=S.ext-S.leg; S.ote=S.leg+SEQ_OTE*rS; S.sl=S.ext+0.03*rS; S.wsl=Math.max(S.sl,S.ex13!=null?S.ex13:S.sl); }
       if(S.stage===2&&(c.c>=S.ext||i-S.mssBar>SEQ_MSS_BARS)) S={stage:0};
     }
-    out.L=L; out.S=S; out.N=N; return out;
+    out.L=L; out.S=S; out.N=N; out.mTrend=mTrend; return out;
   }
   window.seqReplay=seqReplay;
+  // v0.56.0 實測卡狀態（只顯示、不擋單；與 TV SIG v4.9.6「實測卡」列同規則）
+  function smcCardStatus(prop,cs){
+    var now=Date.now(), last=(cs&&cs.length)?cs[cs.length-1].t:now, t=Math.max(now,last);
+    var dd=smcDataDay(t), kz=smcKzId(t), dir=prop&&prop.dir==='short'?-1:1, tr=prop&&prop.trend!=null?prop.trend*dir:0;
+    var nx=dd.next?new Date(dd.next+8*3600000).toISOString().slice(5,16).replace('-','/').replace('T',' '):null;
+    if(dd.noWin) return {col:'#f85149',txt:'⛔ 數據 ±30 分禁區',note:'不進場、撤掉未成交掛單'};
+    if(kz===2) return {col:'#8b949e',txt:'倫敦 · 模擬盤不打（C03）',note:'69 天倫敦 23 筆 35% −0.10R，只看、只記錄'};
+    if(dd.dd) return {col:kz===3?'#3fb950':'#d29922',txt:kz===3?'T001 ✓ 數據日 × 紐約':'數據日 · 可等久',note:kz===3?'實測卡 T001：14 筆 79% +1.20R（候選）':'數據日不受 40 分撤單限制'};
+    if(!prop||prop.none||!prop.seq) return {col:'#8b949e',txt:nx?'下個數據 '+nx:'—',note:'目前沒有在等的單'};
+    if(tr!==1) return {col:'#8b949e',txt:'逆勢／未定 · 只看',note:'大結構（擺動 60）不同向'};
+    if(prop.seqStage===3) return {col:(prop.wait!=null&&prop.wait<=8)?'#58A6FF':'#8b949e',txt:(prop.wait!=null&&prop.wait<=8)?'T002 ✓ 已成交（MSS 後 '+prop.wait+' 根）':'已成交（MSS 後 '+(prop.wait!=null?prop.wait:'—')+' 根，非 T002）',note:'實測卡 T002：28 筆 71% +0.86R（候選）'};
+    var w=prop.wait!=null?prop.wait:0;
+    if(w<=8) return {col:'#58A6FF',txt:'T002 ⏱ '+w+'/8',note:'MSS 後 40 分內回 OTE＝T002；過 8 根沒成交就撤'};
+    return {col:'#f85149',txt:'⏱ 40 分到 → 撤單（非數據日）',note:'拖太久＝力道弱（35% −0.08R），撤單、不打反向'};
+  }
+  window.smcCardStatus=smcCardStatus;
+  function smcCardBox(prop,cs){ var c=smcCardStatus(prop,cs);
+    return '<div style="margin:0 0 7px;padding:5px 9px;border-radius:6px;background:rgba(13,18,32,.6);border:1px solid '+c.col+'"><span style="font-size:9px;color:#8b949e;letter-spacing:.5px">實測卡</span> <b style="color:'+c.col+';font-size:12px">'+c.txt+'</b><div style="color:#8b949e;font-size:10px;margin-top:1px">'+c.note+'</div>'
+      +'<div style="font-size:9px;color:#6e7681;margin-top:2px">止損：'+(smcSlMode()==='wick'?'前高收針（試行）':'掃點外（原版）')+' · <a href="javascript:void(0)" style="color:#58A6FF" onclick="window.smcSetSlMode(\''+(smcSlMode()==='wick'?'orig':'wick')+'\')">切換</a></div></div>'; }
   // 提議 setup：順序式有進行中的腿就以它為準（v0.51）；否則吃偵測到的圖卡層級，沒卡時才退回幾何
   function proposeSetup(d, lv, seq){
     if(seq){
@@ -7465,8 +7499,10 @@ injectICTFlagshipGrid();
       if(A){
         var en=A.stage===3?A.fill:A.ote, slv=A.sl, rk=Math.abs(en-slv), rp=en?rk/en:0;
         if(!(rk>0) || rp<SEQ_MIN_RISK) return {none:true, seq:true, dir:ad, riskPct:rp, reason:'⑥ 停損距離 '+(rp*100).toFixed(2)+'% < '+(SEQ_MIN_RISK*100).toFixed(1)+'% · 結構太小，跳過'};
-        return {dir:ad, entry:en, sl:slv, tp:(ad==='long'?en+2*rk:en-2*rk), rr:2, pos:(d&&d.pos!=null)?d.pos:null,
-                slSrc:'⑤ 掃點外', enSrc:'OTE 62% 限價', seq:true, seqStage:A.stage, riskPct:rp, riskOk:true};
+        var tpv=(ad==='long'?en+2*rk:en-2*rk), wick=smcSlMode()==='wick'&&A.wsl!=null, slE=wick?A.wsl:slv, rkE=Math.abs(en-slE);
+        return {dir:ad, entry:en, sl:slE, slOrig:slv, tp:tpv, rr:rkE>0?Math.abs(tpv-en)/rkE:2, pos:(d&&d.pos!=null)?d.pos:null,
+                slSrc:wick?'前高收針（試行）':'⑤ 掃點外', enSrc:'OTE 62% 限價', seq:true, seqStage:A.stage, riskPct:rp, riskOk:true,
+                mssBar:A.mssBar, wait:(A.stage===2&&A.mssBar!=null&&seq.N)?(seq.N-1-A.mssBar):A.wait, trend:seq.mTrend};
       }
     }
     if(!d || !(d.hi>d.lo) || d.pos==null) return {none:true,reason:'等區間成形'};
@@ -7710,7 +7746,7 @@ injectICTFlagshipGrid();
       var stBox='<div style="margin:2px 0 7px;padding:6px 9px;border-radius:6px;background:'+stBg+';border:1px solid '+stCol+'"><b style="color:'+stCol+';font-size:12px">'+stTxt+'</b> <span style="color:#8b949e;font-size:10px;font-family:monospace">掃'+hiLo+' '+(trig.swept?'✓':'—')+' · MSS '+(trig.mss?'✓':'—')+'</span><div style="color:#c9d1d9;font-size:10px;margin-top:2px">'+stNote+'</div></div>';
       ph='<div style="margin-top:7px;padding-top:7px;border-top:1px dashed #2b3240">'
         +'<div style="font-weight:800;color:#e6edf3;margin-bottom:4px">💡 提議 setup <span style="color:#6e7681;font-weight:600">· v1 近似，對照 TV 再下</span></div>'
-        +stBox
+        +stBox+smcCardBox(prop,cs)
         +(reso?('<div style="margin:2px 0 7px;padding:7px 9px;border-radius:6px;background:'+(reso.tier==='high'?'rgba(240,185,11,.12)':(reso.tier==='small'?'rgba(210,153,34,.10)':'rgba(110,118,129,.12)'))+';border:1px solid '+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#6e7681'))+'">'
           +'<div style="display:flex;align-items:center;gap:8px"><b style="font-size:16px;font-family:monospace;color:'+(reso.tier==='high'?'#F0B90B':(reso.tier==='small'?'#d29922':'#8b949e'))+'">共振 '+reso.score+'</b><span style="font-size:10px;color:#8b949e">'+(reso.tier==='high'?'🎯 高勝率':(reso.tier==='small'?'⚡ 小單':'⊘ 監測'))+' · '+reso.fired+'/4 庫同向</span></div>'
           +'<div style="display:flex;gap:11px;margin-top:4px;font-size:10px">'+['ict','kbar','trend','harm'].map(function(x){var lbl={ict:'ICT',kbar:'K線',trend:'趨勢',harm:'諧波'}[x];var st=reso.lights[x];var col=st==='agree'?'#3fb950':(st==='conflict'?'#f85149':'#4a515c');var dot=st==='agree'?'●':(st==='conflict'?'✕':'○');return '<span style="color:'+col+'">'+dot+' '+lbl+'</span>';}).join('')+'</div>'
