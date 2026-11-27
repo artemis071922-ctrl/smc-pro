@@ -7490,7 +7490,7 @@ injectICTFlagshipGrid();
   function smcCardBox(prop,cs){ var c=smcCardStatus(prop,cs);
     return '<div style="margin:0 0 7px;padding:5px 9px;border-radius:6px;background:rgba(13,18,32,.6);border:1px solid '+c.col+'"><span style="font-size:9px;color:#8b949e;letter-spacing:.5px">實測卡</span> <b style="color:'+c.col+';font-size:12px">'+c.txt+'</b><div style="color:#8b949e;font-size:10px;margin-top:1px">'+c.note+'</div>'
       +'<div style="font-size:9px;color:#6e7681;margin-top:2px">止損：'+(smcSlMode()==='wick'?'前高收針（試行）':'掃點外（原版）')+' · <a href="javascript:void(0)" style="color:#58A6FF" onclick="window.smcSetSlMode(\''+(smcSlMode()==='wick'?'orig':'wick')+'\')">切換</a></div></div>'; }
-  // v0.57.0 共振劇本（與 TV「SMC共振劇本」v0.1.1 同權重；只顯示、不擋單）
+  // v0.57.0 共振劇本（與 TV SIG v4.9.7「共振劇本」同權重；11/27 由獨立指標 v0.1.1 併入 SIG；只顯示、不擋單）
   // 權重＝四幣 69 天 KZ 順勢 115 筆前半段的增量淨R×100（同組只取一加一扣、兩段同號才採用）；樣本外後半段 ≥60 分 12 筆 92% +1.39R
   // 瀏覽器沒有 OI、配對幣、成交量 → OI洗出／SMT背離／量比 看 TV（兩邊不一樣時以 TV 為準）
   var SMC_RZ_W={ny:28,ldn:-16,wait:12,choch:-19,deep:-12,pin:-6,sl:-37,oiw:16,smt:36,vol:11};
